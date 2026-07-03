@@ -1,0 +1,21 @@
+name = "visualizadorcontbil"
+main = "dist/server/server.js"
+compatibility_date = "2024-12-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Assets estáticos do frontend (servidos pelo CDN do Cloudflare)
+[assets]
+directory = "dist/client"
+binding = "ASSETS"
+
+# Variáveis públicas (não-sensíveis)
+[vars]
+SUPABASE_URL = "https://jzkvarjffcqrfphewgxx.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6a3ZhcmpmZmNxcmZwaGV3Z3h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MjE0MTYsImV4cCI6MjA5NzI5NzQxNn0.13PIC1G1QT8uV8w-d7RJPiqaHEoOYNOI_cbBgL97128"
+VITE_SUPABASE_URL = "https://jzkvarjffcqrfphewgxx.supabase.co"
+VITE_SUPABASE_PROJECT_ID = "jzkvarjffcqrfphewgxx"
+VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6a3ZhcmpmZmNxcmZwaGV3Z3h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MjE0MTYsImV4cCI6MjA5NzI5NzQxNn0.13PIC1G1QT8uV8w-d7RJPiqaHEoOYNOI_cbBgL97128"
+
+# Segredos — configure via terminal ANTES de fazer o deploy:
+#   npx wrangler secret put LOVABLE_API_KEY
+#   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
