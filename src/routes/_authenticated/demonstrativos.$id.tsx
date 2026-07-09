@@ -94,6 +94,10 @@ function DemoDetail() {
           <Loader2 className="size-8 animate-spin mx-auto text-primary mb-3" />
           <p className="font-medium">Processando com IA...</p>
           <p className="text-sm text-muted-foreground mt-1">Extraindo dados do documento.</p>
+          <p className="text-xs text-muted-foreground mt-4">Se ficar preso por mais de 1 minuto, exclua e envie novamente.</p>
+          <Button size="sm" variant="ghost" className="mt-2 text-destructive" onClick={remove}>
+            <Trash2 className="size-3.5 mr-1" />Excluir e tentar novamente
+          </Button>
         </Card>
       )}
 

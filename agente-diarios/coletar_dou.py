@@ -63,6 +63,12 @@ PALAVRAS_INCLUIR = [
     "salário-família", "INSS", "CAGED", "RAIS",
     "recolhimento", "tabela", "alíquota",
     "IN RFB", "IN SRF",
+    # Tributos federais e obrigações (novas — mais meticuloso)
+    "IPI", "PIS", "COFINS", "PIS/COFINS", "IRPJ", "CSLL", "IRRF", "IOF",
+    "Simples Nacional", "Lucro Real", "Lucro Presumido",
+    "SPED", "EFD", "EFD-Contribuições", "SPED Fiscal", "NF-e", "crédito presumido",
+    "substituição tributária", "regime especial", "benefício fiscal",
+    "ICMS", "ISS", "pauta", "PMPF", "preço médio ponderado",
 ]
 
 # Palavras que excluem mesmo se órgão bater
@@ -76,17 +82,31 @@ PALAVRAS_EXCLUIR = [
 EMPRESAS = ["LRG", "EMPRESA HIDROMINERAL", "MUZACO", "WIKI SUPRIMENTOS"]
 
 
-def logar() -> requests.Session:
-    s = requests.Session()
-    r = s.post(f"{INLABS_BASE}/logar.php", data={
-        "email": INLABS_EMAIL,
-        "password": INLABS_SENHA,
-    }, timeout=15)
-    r.raise_for_status()
-    if "logout" not in r.text.lower():
-        raise RuntimeError("Login INLabs falhou — verifique email/senha no .env")
-    print("  INLabs: login OK", file=sys.stderr)
-    return s
+def logar(tentativas: int = 5) -> requests.Session:
+    """Loga no INLabs com retry — o servidor às vezes retorna 502/503 transitório."""
+    import time as _t
+    ultimo_erro = None
+    for t in range(tentativas):
+        s = requests.Session()
+        try:
+            r = s.post(f"{INLABS_BASE}/logar.php", data={
+                "email": INLABS_EMAIL,
+                "password": INLABS_SENHA,
+            }, timeout=30)
+            if r.status_code in (500, 502, 503, 504):
+                raise RuntimeError(f"HTTP {r.status_code} (servidor INLabs instável)")
+            r.raise_for_status()
+            if "logout" not in r.text.lower():
+                raise RuntimeError("Login INLabs falhou — verifique email/senha no .env")
+            print("  INLabs: login OK", file=sys.stderr)
+            return s
+        except Exception as e:
+            ultimo_erro = e
+            if t < tentativas - 1:
+                espera = 10 * (t + 1)
+                print(f"  INLabs login tentativa {t+1}/{tentativas} falhou ({e}) — aguardando {espera}s...", file=sys.stderr)
+                _t.sleep(espera)
+    raise RuntimeError(f"Login INLabs falhou após {tentativas} tentativas: {ultimo_erro}")
 
 
 def baixar_secao(session: requests.Session, data_str: str, pasta_tmp: str, secao: str = "DO1") -> str:
@@ -250,15 +270,33 @@ def coletar_dou(data_str: str = None) -> list:
     resultados = []
 
     try:
-        # Seção 1: atos fiscais/trabalhistas + menções a clientes
+        # Seção 1 (edição normal + extra): atos fiscais/trabalhistas + clientes.
+        # DO1E = edição extra da Seção 1 (atos urgentes publicados fora do horário).
         res_do1 = _processar_secao(session, data_str, "DO1", pasta_tmp, apenas_clientes=False)
         resultados.extend(res_do1)
+        res_do1e = _processar_secao(session, data_str, "DO1E", pasta_tmp, apenas_clientes=False)
+        resultados.extend(res_do1e)
 
-        # Seção 3: apenas menções a clientes (registros, autorizações, CVM, CADE)
+        # Seção 3 (normal + extra): apenas menções a clientes
         res_do3 = _processar_secao(session, data_str, "DO3", pasta_tmp, apenas_clientes=True)
         resultados.extend(res_do3)
+        res_do3e = _processar_secao(session, data_str, "DO3E", pasta_tmp, apenas_clientes=True)
+        resultados.extend(res_do3e)
 
-        print(f"  DOU filtrado: {len(resultados)} atos relevantes (DO1={len(res_do1)}, DO3={len(res_do3)})", file=sys.stderr)
+        # Deduplica por idMateria (a mesma matéria não deve repetir entre seções)
+        vistos, unicos = set(), []
+        for r in resultados:
+            chave = r.get("numero_doc") or (r["numero_ato"][:100], r["resumo"][:120])
+            if chave not in vistos:
+                vistos.add(chave)
+                unicos.append(r)
+        resultados = unicos
+
+        print(
+            f"  DOU filtrado: {len(resultados)} atos relevantes "
+            f"(DO1={len(res_do1)}, DO1E={len(res_do1e)}, DO3={len(res_do3)}, DO3E={len(res_do3e)})",
+            file=sys.stderr,
+        )
     finally:
         shutil.rmtree(pasta_tmp, ignore_errors=True)
 

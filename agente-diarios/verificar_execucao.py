@@ -23,6 +23,25 @@ def carregar_json(nome):
         return json.load(f)
 
 
+def checar_supabase():
+    """Retorna (ok: bool, detalhe: str). Detecta projeto pausado (DNS falha)."""
+    import socket
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(dotenv_path=str(DIR / ".env"))
+    except Exception:
+        pass
+    url = os.environ.get("SUPABASE_URL", "")
+    if not url:
+        return False, "SUPABASE_URL não configurado no .env"
+    host = url.replace("https://", "").replace("http://", "").split("/")[0]
+    try:
+        socket.gethostbyname(host)
+        return True, "acessível"
+    except Exception:
+        return False, f"host '{host}' não resolve (projeto possivelmente PAUSADO)"
+
+
 def verificar():
     combinados = carregar_json("dados_combinados.json")
     filtrados  = carregar_json("registros_filtrados.json")
@@ -63,6 +82,11 @@ def verificar():
     if sem_resumo:
         problemas.append(f"{len(sem_resumo)} registro(s) sem resumo: {', '.join(sem_resumo[:3])}")
 
+    # Conectividade do Supabase (base da versão online)
+    sb_ok, sb_detalhe = checar_supabase()
+    if not sb_ok:
+        problemas.append(f"Supabase inacessível: {sb_detalhe}")
+
     # ── Relatório texto ─────────────────────────────────────────────
     linhas = [
         f"{'='*55}",
@@ -82,6 +106,7 @@ def verificar():
         f"  Após filtro         : {len(filt_hoje)}",
         f"  Enriquecidos        : {len(enriquecidos)}",
         f"  Excel gerado        : {'SIM OK' if excel_ok else 'NAO GERADO'}",
+        f"  Supabase            : {'OK' if sb_ok else 'FALHOU - ' + sb_detalhe}",
     ]
 
     if filt_hoje:
@@ -93,7 +118,7 @@ def verificar():
                 linhas.append(f"      {resumo}{'...' if len(r.get('resumo','')) > 90 else ''}")
 
     if problemas:
-        linhas += ["", "  ⚠ PROBLEMAS DETECTADOS:"]
+        linhas += ["", "  PROBLEMAS DETECTADOS:"]
         for p in problemas:
             linhas += [f"    • {p}"]
     else:

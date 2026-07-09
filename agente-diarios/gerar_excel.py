@@ -351,11 +351,37 @@ def buscar_mencoes_clientes(todos_registros: list, clientes: list) -> list:
 
     mencoes_por_cliente: dict[str, list] = {c["nome"]: [] for c in clientes}
 
+    # Mapa nome-normalizado -> cliente, para honrar o _empresa já detectado pelo coletor
+    norm_para_cliente = {normalizar(c["nome"]): c for c in clientes}
+
     for reg in todos_registros:
         texto_norm = normalizar(
             f"{reg.get('numero_ato','')} {reg.get('resumo','')} {reg.get('orgao','')}"
         )
         marcados = set()
+
+        # 1) Honra o _empresa que o coletor já detectou (matching sobre o texto COMPLETO,
+        #    que pode ter a menção fora do resumo). Cliente detectado nunca pode sumir.
+        emp = normalizar(reg.get("_empresa", "") or "")
+        if emp:
+            cli = norm_para_cliente.get(emp)
+            if not cli:  # tenta casamento parcial (nome do cliente contém/está contido)
+                for n_norm, c in norm_para_cliente.items():
+                    if emp and (emp in n_norm or n_norm in emp):
+                        cli = c; break
+            if cli:
+                nome = cli["nome"]
+                mencoes_por_cliente[nome].append({
+                    "cliente": nome, "termo_usado": reg.get("_empresa", ""), "_encontrado": True,
+                    "data": reg.get("data", ""), "_aba": reg.get("_aba", ""),
+                    "numero_ato": reg.get("numero_ato", ""), "ato_alterado": reg.get("ato_alterado", "") or "—",
+                    "resumo": reg.get("resumo", ""), "orgao": reg.get("orgao", ""),
+                    "prazo": reg.get("prazo", "") or "—", "tributo_materia": reg.get("tributo_materia", ""),
+                    "numero_doc": reg.get("numero_doc", ""), "link": reg.get("link", ""),
+                })
+                marcados.add(nome)
+
+        # 2) Matching por palavras de busca sobre numero_ato+resumo+orgao
         for cliente in clientes:
             nome = cliente["nome"]
             if nome in marcados:
@@ -523,13 +549,25 @@ def criar_excel(registros: list, caminho_saida: str, todos_registros: list = Non
         encontrados = len(nomes_encontrados)
         print(f"  Aba Clientes JS: {encontrados} encontrado(s) / {len(clientes) - encontrados} não citado(s)")
 
-    # ── Aba Jurisprudência ──
+    # ── Aba Jurisprudência ── sempre criada, mesmo sem conteúdo, para deixar
+    # explícito que a verificação foi feita (não fica "esquecida" silenciosamente).
+    ws_juris = wb.create_sheet(title="Jurisprudencia")
+    estilo_header(ws_juris, COR_HEADER, COLUNAS_JURIS)
     if regs_juris:
-        ws_juris = wb.create_sheet(title="Jurisprudencia")
-        estilo_header(ws_juris, COR_HEADER, COLUNAS_JURIS)
         for i, reg in enumerate(regs_juris, 2):
             campos = extrair_campos_juris(reg)
             escrever_linha_juris(ws_juris, i, campos)
+    else:
+        fonte_vazia_j = Font(name="Arial", size=10, italic=True, color="555555")
+        valores = ["—", "—", "—",
+                   "Nenhum acórdão, recurso julgado ou resposta à consulta foi "
+                   "publicado nos diários de hoje.",
+                   "—", "—", "—", "—", "—"]
+        for col_idx, valor in enumerate(valores, 1):
+            cell = ws_juris.cell(row=2, column=col_idx, value=valor)
+            cell.font = fonte_vazia_j
+            cell.alignment = Alignment(vertical="top", wrap_text=True)
+        print("  Aba Jurisprudencia: 0 acórdão(s)/recurso(s) hoje — registrado 'nada a informar'.")
 
     wb.save(caminho_saida)
     print(f"Excel salvo: {caminho_saida}")

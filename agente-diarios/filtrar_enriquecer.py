@@ -11,14 +11,21 @@ load_dotenv()
 
 PALAVRAS_INCLUIR = [
     # Tributos estaduais — específicos
-    "ICMS", "RICMS", "ITD", "ITCMD", "IPVA", "ISS", "FECP",
+    "ICMS", "RICMS", "ITD", "ITCMD", "IPVA", "ISS", "ISSQN", "FECP",
+    # Tributos federais — específicos
+    "IPI", "PIS", "COFINS", "PIS/COFINS", "IRPJ", "CSLL", "IRRF", "IOF",
     "substituição tributária", "isenção fiscal", "benefício fiscal",
-    "regime especial", "parcelamento fiscal", "REFIS", "pauta fiscal",
+    "benefícios fiscais", "cBenef", "código de benefício", "crédito presumido",
+    "diferimento", "regime especial", "parcelamento fiscal", "REFIS",
     "base de cálculo", "alíquota", "redução de base",
     "convênio ICMS", "protocolo ICMS", "CONFAZ",
+    # Pauta / valores de referência / fundos e leis RJ
+    "pauta fiscal", "pauta", "PMPF", "preço médio ponderado", "valor de referência",
+    "FOT", "Fundo Orçamentário Temporário", "FEEF",
+    "Lei 9.025", "Lei nº 9.025", "9.025/2020", "Lei 6.979", "Lei nº 6.979", "6.979/2015",
     # Obrigações acessórias
-    "EFD", "SPED", "NF-e", "MDF-e", "CT-e", "escrituração fiscal",
-    "cadastro de contribuinte",
+    "EFD", "SPED", "SPED Fiscal", "EFD-Contribuições", "EFD ICMS", "NF-e", "NFC-e",
+    "MDF-e", "CT-e", "escrituração fiscal", "cadastro de contribuinte",
     # Órgãos fazendários — com contexto fiscal
     "SEFAZ", "SUTRI", "SUPTRIB", "CAT-SP", "SRE", "SAIF",
     # Trabalhista/previdenciário — DOU
@@ -126,6 +133,17 @@ ABA DOU: portarias e instruções normativas do MTE e RFB que tratem de:
 - Créditos suplementares, abertura de crédito orçamentário;
 - Atos de RH, disciplinares, internos de segurança pública, saúde ou educação;
 - Resoluções de saúde (CIB, CES), conselhos de educação (CEE) sem relação fiscal.
+
+=== PALAVRAS-CHAVE PRIORITÁRIAS (SEMPRE MANTER se aparecerem) ===
+Qualquer ato que mencione: ICMS, IPI, PIS, COFINS, PIS/COFINS, ISS/ISSQN, IRPJ, CSLL,
+IOF, IPVA, ITCMD/ITD, cBenef / Código de Benefício Fiscal, benefício/incentivo fiscal,
+crédito presumido, diferimento, substituição tributária, regime especial, SPED / EFD /
+EFD-Contribuições, Convênio/Protocolo ICMS, CONFAZ, Simples Nacional,
+PAUTA fiscal / valores de pauta, PMPF (preço médio ponderado), FOT (Fundo Orçamentário
+Temporário), FEEF, Lei nº 9.025/2020 (RJ), Lei nº 6.979/2015 (RJ).
+ATENÇÃO ESPECIAL A LEIS: toda LEI ou DECRETO estadual/federal que trate de tributos,
+benefícios fiscais ou obrigações acessórias DEVE ser mantida — nunca descarte uma lei
+tributária mesmo que o resumo esteja fragmentado; avalie pelo número da lei e órgão.
 
 === REGRA DE OURO ===
 EM CASO DE DÚVIDA, MANTENHA o registro — é preferível incluir um ato que não seja
@@ -259,35 +277,91 @@ def enriquecer_com_claude(registros: list) -> list:
 
     print(f"Enviando {len(registros)} registros para enriquecimento via claude CLI...", flush=True)
 
-    for tentativa in range(3):
-        try:
-            result = subprocess.run(
-                [_CLAUDE_EXE, "--print", "--output-format", "text"],
-                input=mensagem,
-                capture_output=True, text=True, encoding='utf-8',
-                timeout=240,
-            )
-            if result.returncode != 0:
-                raise RuntimeError(result.stderr[:300])
+    import time as _time
 
-            resposta = result.stdout.strip()
+    for tentativa in range(3):
+        proc = None
+        try:
+            proc = subprocess.Popen(
+                [_CLAUDE_EXE, "--print", "--model", "claude-opus-4-8", "--output-format", "text"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True, encoding='utf-8',
+            )
+            try:
+                stdout, stderr = proc.communicate(input=mensagem, timeout=90)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.communicate()
+                raise RuntimeError("CLI travou — timeout de 90s atingido.")
+
+            if proc.returncode != 0:
+                raise RuntimeError(stderr[:300])
+
+            resposta = stdout.strip()
             if "```" in resposta:
                 m = re.search(r"```(?:json)?\s*([\s\S]+?)```", resposta, re.DOTALL)
                 if m:
                     resposta = m.group(1).strip()
 
-            return json.loads(resposta)
+            # Parse robusto: tolera texto/linhas extras antes ou depois do JSON
+            # (o CLI às vezes anexa conteúdo, causando "Extra data").
+            try:
+                return json.loads(resposta)
+            except json.JSONDecodeError:
+                inicio = resposta.find("[")
+                if inicio < 0:
+                    inicio = resposta.find("{")
+                if inicio >= 0:
+                    obj, _fim = json.JSONDecoder().raw_decode(resposta[inicio:])
+                    return obj
+                raise
 
         except Exception as e:
+            if proc:
+                try: proc.kill()
+                except: pass
             if tentativa < 2:
-                import time as _time
-                print(f"  Tentativa {tentativa+1} falhou ({e}) — aguardando 30s...", flush=True)
-                _time.sleep(30)
+                print(f"  Tentativa {tentativa+1} falhou ({e}) — aguardando 20s...", flush=True)
+                _time.sleep(20)
             else:
                 print(f"Aviso: enriquecimento falhou ({e}), usando registros sem enriquecimento.", file=sys.stderr)
                 return registros
 
     return registros
+
+
+CACHE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "cache_enriquecido.json")
+CACHE_DIAS_RETENCAO = 90  # descarta entradas de cache mais antigas que isso
+
+
+def _chave_cache(r: dict) -> str:
+    """Identidade estável do ato: numero_doc (ou início do numero_ato) + hash do
+    início do resumo, para diferenciar atos com título genérico (ex.: 'Recurso')."""
+    import hashlib
+    base = str(r.get("numero_doc", "") or r.get("numero_ato", "")[:60])
+    h = hashlib.md5((r.get("resumo", "") or "")[:300].encode("utf-8", errors="ignore")).hexdigest()[:10]
+    return f"{base}|{h}"
+
+
+def carregar_cache() -> dict:
+    if os.path.exists(CACHE_FILE):
+        try:
+            with open(CACHE_FILE, encoding="utf-8") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def salvar_cache(cache: dict):
+    # Poda entradas antigas para o arquivo não crescer indefinidamente
+    from datetime import date, timedelta
+    limite = (date.today() - timedelta(days=CACHE_DIAS_RETENCAO)).isoformat()
+    podado = {k: v for k, v in cache.items() if v.get("data", "9999") >= limite}
+    with open(CACHE_FILE, "w", encoding="utf-8") as f:
+        json.dump(podado, f, ensure_ascii=False, indent=2)
 
 
 def main():
@@ -315,19 +389,40 @@ def main():
             json.dump([], f)
         return
 
-    # Índice por numero_doc para restaurar campos que Claude pode esvaziar
-    idx_original = {str(r.get("numero_doc", "") or r.get("numero_ato", "")[:30]): r for r in filtrados}
+    # ── CACHE: pula o Claude para atos já decididos em execução anterior do
+    # mesmo dia (10h/12h/16h reprocessam as mesmas fontes; sem cache, o mesmo
+    # ato seria reenviado ao modelo 2-3x/dia à toa). Só manda ao Claude o que
+    # é genuinamente novo desde a última execução.
+    cache = carregar_cache()
+    novos, reaproveitados = [], []
+    for r in filtrados:
+        entrada = cache.get(_chave_cache(r))
+        if entrada is None:
+            novos.append(r)
+        elif entrada.get("mantido"):
+            reaproveitados.append(entrada["registro"])
+        # se mantido=False (descartado antes), não faz nada — proteção de
+        # clientes abaixo garante que um cliente citado nunca fica de fora.
+    if len(novos) < len(filtrados):
+        print(f"  [CACHE] {len(filtrados) - len(novos)} já processado(s) em execução anterior "
+              f"(reaproveitado, 0 tokens) | {len(novos)} novo(s) para enviar ao Claude", flush=True)
 
-    # Enriquecimento via Claude (em lotes de 10 para evitar truncamento)
-    enriquecidos = []
-    LOTE = 10
-    for i in range(0, len(filtrados), LOTE):
-        lote = filtrados[i:i+LOTE]
+    # Índice por numero_doc para restaurar campos que Claude pode esvaziar
+    idx_original = {str(r.get("numero_doc", "") or r.get("numero_ato", "")[:30]): r for r in novos}
+
+    # Enriquecimento via Claude (em lotes de 30 — Opus 4.8 aguenta bem mais que
+    # 10 por chamada; menos lotes = menos repetição do prompt-sistema)
+    enriquecidos = list(reaproveitados)
+    LOTE = 30
+    for i in range(0, len(novos), LOTE):
+        lote = novos[i:i+LOTE]
         resultado = enriquecer_com_claude(lote)
-        # Restaura campos que Claude pode ter esvaziado
+        chaves_lote = {_chave_cache(r): r for r in lote}
+        chaves_mantidas = set()
+        # Restaura campos que Claude pode ter esvaziado + atualiza cache
         for r in resultado:
-            chave = str(r.get("numero_doc", "") or r.get("numero_ato", "")[:30])
-            orig = idx_original.get(chave)
+            chave_restore = str(r.get("numero_doc", "") or r.get("numero_ato", "")[:30])
+            orig = idx_original.get(chave_restore)
             if orig:
                 if not r.get("data"):
                     r["data"] = orig.get("data", "")
@@ -335,8 +430,29 @@ def main():
                     r["link"] = orig.get("link", "")
                 if not r.get("_aba"):
                     r["_aba"] = orig.get("_aba", "")
+                ch = _chave_cache(orig)
+                cache[ch] = {"mantido": True, "registro": r, "data": r.get("data", "")}
+                chaves_mantidas.add(ch)
+        for ch, orig in chaves_lote.items():
+            if ch not in chaves_mantidas:
+                cache[ch] = {"mantido": False, "data": orig.get("data", "")}
+        salvar_cache(cache)  # salva incrementalmente — resiliente a interrupção no meio do lote
         enriquecidos.extend(resultado)
         print(f"Lote {i//LOTE + 1}: {len(resultado)} registros processados", flush=True)
+
+    # PROTEÇÃO CLIENTES: todo registro com cliente citado (_empresa) DEVE constar,
+    # mesmo que o Claude (agora ou no cache) o tenha descartado. Nunca some.
+    def _chave(r):
+        return str(r.get("numero_doc", "") or r.get("numero_ato", "")[:30])
+    chaves_saida = {_chave(r) for r in enriquecidos}
+    reincluidos = 0
+    for orig in filtrados:
+        if orig.get("_empresa") and _chave(orig) not in chaves_saida:
+            enriquecidos.append(orig)          # mantém o registro cru do cliente
+            chaves_saida.add(_chave(orig))
+            reincluidos += 1
+    if reincluidos:
+        print(f"  [CLIENTES] {reincluidos} registro(s) de cliente reincluído(s) (Claude havia descartado).", flush=True)
 
     with open(sys.argv[2], "w", encoding="utf-8") as f:
         json.dump(enriquecidos, f, ensure_ascii=False, indent=2)

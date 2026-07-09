@@ -29,6 +29,13 @@ PALAVRAS_FISCAIS = [
     "trabalhist", "clt", "previdênci", "inss", "fgts", "salário",
     "rescisão", "demissão", "admissão", "empregado",
     "sefaz", "receita estadual", "secretaria de fazenda",
+    # Obrigações acessórias e benefícios (novas — mais meticuloso)
+    "ipi", "sped", "efd", "cbenef", "código de benefício", "benefício fiscal",
+    "benefícios fiscais", "crédito presumido", "diferimento", "regime especial",
+    "confaz", "convênio icms", "protocolo icms",
+    # Pauta / valores de referência / fundos e leis
+    "pauta", "pmpf", "preço médio ponderado", "valor de referência",
+    "fundo orçamentário temporário", "feef", "9.025", "6.979",
 ]
 
 PALAVRAS_EXCLUIR = [
@@ -44,18 +51,22 @@ session = requests.Session()
 session.headers.update({"User-Agent": "Mozilla/5.0", "Accept": "application/json"})
 
 
-def obter_edicao(data_str: str) -> dict | None:
-    """Retorna dados da edição para a data (id, numero, paginas)."""
+def obter_edicoes(data_str: str) -> list[dict]:
+    """Retorna TODAS as edições da data (normal + extras). O ES pode publicar
+    mais de uma edição no mesmo dia — atos urgentes saem em edição extra."""
     url = f"{BASE_API}/edicoes_from_data/{data_str}.json"
     r = session.get(url, params={"subtheme": "false"}, timeout=20)
     if r.status_code == 404:
-        return None
+        return []
     r.raise_for_status()
     data = r.json()
-    itens = data.get("itens", [])
-    if not itens:
-        return None
-    return itens[0]  # {"id": 11217, "data": "17/06/2026", "numero": 26747, "paginas": 152}
+    return data.get("itens", [])  # [{"id":11217,"data":"17/06/2026","numero":26747,"paginas":152}, ...]
+
+
+def obter_edicao(data_str: str) -> dict | None:
+    """Compatibilidade: retorna a primeira edição da data (ou None)."""
+    edicoes = obter_edicoes(data_str)
+    return edicoes[0] if edicoes else None
 
 
 def obter_sumario_html(edicao_id: int) -> str:
@@ -120,17 +131,8 @@ def filtro_basico(texto: str) -> bool:
     return any(p in t for p in PALAVRAS_FISCAIS)
 
 
-def coletar_doe_es(data_str: str = None) -> list:
-    if not data_str:
-        data_str = (date.today() - timedelta(days=1)).isoformat()
-
-    print(f"Coletando DOE-ES {data_str}...", file=sys.stderr)
-
-    edicao = obter_edicao(data_str)
-    if not edicao:
-        print(f"  DOE-ES: edição não encontrada para {data_str}", file=sys.stderr)
-        return []
-
+def _coletar_edicao_es(edicao: dict, data_str: str) -> list:
+    """Processa uma única edição do ES e retorna os atos relevantes."""
     edicao_id = edicao["id"]
     numero_edicao = edicao.get("numero", "")
     print(f"  Edição {numero_edicao} (ID {edicao_id}), {edicao.get('paginas',0)} páginas", file=sys.stderr)
@@ -196,8 +198,39 @@ def coletar_doe_es(data_str: str = None) -> list:
             "link": f"{BASE_PORTAL}/portal/visualizacoes/diario_oficial#{pub_id}",
         })
 
-    print(f"  DOE-ES filtrado: {len(resultados)} atos relevantes", file=sys.stderr)
     return resultados
+
+
+def coletar_doe_es(data_str: str = None) -> list:
+    if not data_str:
+        data_str = (date.today() - timedelta(days=1)).isoformat()
+
+    print(f"Coletando DOE-ES {data_str}...", file=sys.stderr)
+
+    edicoes = obter_edicoes(data_str)
+    if not edicoes:
+        print(f"  DOE-ES: edição não encontrada para {data_str}", file=sys.stderr)
+        return []
+
+    print(f"  {len(edicoes)} edição(ões) para processar", file=sys.stderr)
+
+    resultados = []
+    for edicao in edicoes:
+        try:
+            resultados.extend(_coletar_edicao_es(edicao, data_str))
+        except Exception as e:
+            print(f"  DOE-ES: erro ao processar edição {edicao.get('numero')}: {e}", file=sys.stderr)
+
+    # Deduplica por protocolo
+    vistos, unicos = set(), []
+    for r in resultados:
+        chave = r.get("numero_doc") or (r["numero_ato"][:100], r["resumo"][:120])
+        if chave not in vistos:
+            vistos.add(chave)
+            unicos.append(r)
+
+    print(f"  DOE-ES filtrado: {len(unicos)} atos relevantes", file=sys.stderr)
+    return unicos
 
 
 def main():

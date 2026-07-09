@@ -42,12 +42,20 @@ PALAVRAS_FISCAIS_SUBSTR = [
     "trabalhist", "previdênci", "salário mínimo", "rescisão", "demissão",
     "sefaz", "secretaria de fazenda", "receita estadual",
     "base de cálculo",
+    # Obrigações acessórias e benefícios (novas — mais meticuloso)
+    "sped", "efd", "cbenef", "código de benefício", "benefício fiscal",
+    "benefícios fiscais", "crédito presumido", "diferimento", "regime especial",
+    "confaz", "convênio icms", "protocolo icms",
+    # Pauta / valores de referência / fundos e leis
+    "pauta", "pmpf", "preço médio ponderado", "valor de referência",
+    "fundo orçamentário temporário", "feef",
+    "9.025", "9025", "6.979", "6979",
 ]
 
 PALAVRAS_FISCAIS_WORD = [
-    r"\bicms\b", r"\biss\b", r"\bipva\b", r"\biof\b", r"\birpj\b",
-    r"\bcsll\b", r"\bpis\b", r"\bcofins\b", r"\bmei\b", r"\binss\b",
-    r"\bfgts\b", r"\bclt\b",
+    r"\bicms\b", r"\biss\b", r"\bissqn\b", r"\bipva\b", r"\biof\b", r"\birpj\b",
+    r"\bcsll\b", r"\bpis\b", r"\bcofins\b", r"\bipi\b", r"\bmei\b", r"\binss\b",
+    r"\bfgts\b", r"\bclt\b", r"\bfot\b",
 ]
 
 PALAVRAS_EXCLUIR = [
@@ -74,8 +82,9 @@ session = requests.Session()
 session.headers.update({"User-Agent": "Mozilla/5.0"})
 
 
-def obter_id_caderno_executivo(data_str: str) -> int | None:
-    """Retorna o ID do caderno Diário do Executivo para a data informada."""
+def obter_ids_cadernos(data_str: str) -> list[tuple[int, str]]:
+    """Retorna [(id, descrição)] dos cadernos relevantes: Diário do Executivo
+    E qualquer Edição Extra (atos fiscais urgentes saem em edição extra)."""
     r = session.get(
         f"{BASE_API}/Jornal/ObterEdicaoPorDataPublicacao",
         params={"dataPublicacao": data_str},
@@ -85,27 +94,63 @@ def obter_id_caderno_executivo(data_str: str) -> int | None:
     data = r.json()
     dados = data.get("dados")
     if not dados:
-        return None
+        return []
 
     cadernos = dados.get("cadernos", [])
+    selecionados = []
     for cad in cadernos:
-        desc = cad.get("descricao", "").lower()
-        if "executivo" in desc:
-            return cad["id"]
-    # fallback: primeiro caderno
-    if cadernos:
-        return cadernos[0]["id"]
-    return None
+        desc = cad.get("descricao", "")
+        desc_low = desc.lower()
+        # Executivo (atos do governo) + Edição Extra (urgências fiscais)
+        if "executivo" in desc_low or "extra" in desc_low:
+            secoes_txt = " ".join(s.get("descricao", "") for s in cad.get("secoes", []))
+            selecionados.append((cad["id"], desc, secoes_txt))
+    # fallback: se nada casou, pega o primeiro caderno
+    if not selecionados and cadernos:
+        c0 = cadernos[0]
+        secoes_txt = " ".join(s.get("descricao", "") for s in c0.get("secoes", []))
+        selecionados.append((c0["id"], c0.get("descricao", ""), secoes_txt))
+    return selecionados
 
 
-def baixar_pdf(caderno_id: int) -> bytes | None:
-    """Baixa o PDF do caderno pelo ID; desempacota envelope CMS se necessário."""
-    r = session.get(
-        f"{BASE_API}/Jornal/ObterEdicaoPorId/{caderno_id}",
-        timeout=60,
-    )
-    r.raise_for_status()
-    data = r.json()
+def obter_id_caderno_executivo(data_str: str) -> int | None:
+    """Compatibilidade: retorna o id do primeiro caderno relevante."""
+    ids = obter_ids_cadernos(data_str)
+    return ids[0][0] if ids else None
+
+
+# Termos que indicam conteúdo fiscal numa seção (para avisar sobre edição extra não baixável)
+_SECOES_FISCAIS = ["fazenda", "sefaz", "tribut", "fiscal", "receita", "economia"]
+
+
+def baixar_pdf(caderno_id: int, tentativas: int = 5) -> bytes | None:
+    """Baixa o PDF do caderno pelo ID; desempacota envelope CMS se necessário.
+    O servidor do MG retorna 401 intermitente (rate-limiting) — reidenta com
+    backoff. Retorna None (sem lançar) só depois de esgotar as tentativas."""
+    import time as _time
+    data = None
+    for t in range(tentativas):
+        try:
+            r = session.get(
+                f"{BASE_API}/Jornal/ObterEdicaoPorId/{caderno_id}",
+                timeout=60,
+            )
+            # 401/403/5xx do MG costumam ser transitórios — tenta de novo
+            if r.status_code in (401, 403, 429, 500, 502, 503):
+                espera = 3 * (t + 1)
+                print(f"  DOE-MG: caderno {caderno_id} HTTP {r.status_code}, "
+                      f"tentativa {t+1}/{tentativas}, aguardando {espera}s...", file=sys.stderr)
+                _time.sleep(espera)
+                continue
+            r.raise_for_status()
+            data = r.json()
+            break
+        except Exception as e:
+            print(f"  DOE-MG: erro ao baixar caderno {caderno_id} "
+                  f"(tentativa {t+1}/{tentativas}): {e}", file=sys.stderr)
+            _time.sleep(3 * (t + 1))
+    if data is None:
+        return None
     dados = data.get("dados")
     if not dados:
         return None
@@ -227,33 +272,48 @@ def coletar_doe_mg(data_str: str = None) -> list:
         print("  DOE-MG: instale pdfminer.six ou pypdf", file=sys.stderr)
         return []
 
-    caderno_id = obter_id_caderno_executivo(data_str)
-    if caderno_id is None:
+    cadernos = obter_ids_cadernos(data_str)
+    if not cadernos:
         print(f"  DOE-MG: edição de {data_str} não publicada ainda.", file=sys.stderr)
         return []
 
-    print(f"  Caderno Executivo ID: {caderno_id}", file=sys.stderr)
+    print(f"  {len(cadernos)} caderno(s): {', '.join(d for _, d, _ in cadernos)}", file=sys.stderr)
 
-    pdf_bytes = baixar_pdf(caderno_id)
-    if not pdf_bytes:
-        print("  DOE-MG: falha ao baixar PDF.", file=sys.stderr)
-        return []
+    link = "https://www.jornalminasgerais.mg.gov.br/edicao-do-dia"
+    resultados = []
+    import time as _time
+    for i, (caderno_id, desc, secoes_txt) in enumerate(cadernos):
+        if i > 0:
+            _time.sleep(3)  # evita rate-limiting entre cadernos
+        pdf_bytes = baixar_pdf(caderno_id)
+        if not pdf_bytes:
+            # Se uma edição extra não pôde ser baixada MAS tem seção fiscal, avisa em alto relevo
+            if any(t in secoes_txt.lower() for t in _SECOES_FISCAIS):
+                print(f"  *** AVISO DOE-MG: caderno '{desc}' NÃO baixado e contém seção fiscal "
+                      f"({secoes_txt[:120]}) — VERIFICAR MANUALMENTE em {link} ***", file=sys.stderr)
+            else:
+                print(f"  DOE-MG [{desc}]: não baixado (sem conteúdo fiscal aparente).", file=sys.stderr)
+            continue
 
-    print(f"  PDF baixado: {len(pdf_bytes):,} bytes", file=sys.stderr)
+        texto = extrair_texto_pdf(pdf_bytes)
+        texto = texto.replace("\f", "\n").replace("\r\n", "\n").replace("\r", "\n")
+        if not texto.strip():
+            print(f"  DOE-MG [{desc}]: texto vazio após extração.", file=sys.stderr)
+            continue
 
-    texto = extrair_texto_pdf(pdf_bytes)
-    texto = texto.replace("\f", "\n").replace("\r\n", "\n").replace("\r", "\n")
+        print(f"  DOE-MG [{desc}]: PDF {len(pdf_bytes):,} bytes, {len(texto):,} chars", file=sys.stderr)
+        resultados.extend(filtrar_texto(texto, data_str, link))
 
-    if not texto.strip():
-        print("  DOE-MG: texto vazio após extração.", file=sys.stderr)
-        return []
+    # Deduplica atos repetidos entre cadernos
+    vistos, unicos = set(), []
+    for r in resultados:
+        chave = (r["numero_ato"][:100], r["resumo"][:120])
+        if chave not in vistos:
+            vistos.add(chave)
+            unicos.append(r)
 
-    print(f"  Texto extraído: {len(texto):,} chars", file=sys.stderr)
-
-    link = f"https://www.jornalminasgerais.mg.gov.br/edicao-do-dia"
-    resultados = filtrar_texto(texto, data_str, link)
-    print(f"  DOE-MG filtrado: {len(resultados)} atos relevantes", file=sys.stderr)
-    return resultados
+    print(f"  DOE-MG filtrado: {len(unicos)} atos relevantes", file=sys.stderr)
+    return unicos
 
 
 def main():

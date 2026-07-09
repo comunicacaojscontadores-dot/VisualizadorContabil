@@ -65,13 +65,21 @@ PALAVRAS_FISCAIS_SUBSTR = [
     "trabalhist", "previdênci", "salário mínimo", "rescisão", "demissão",
     "sefaz", "secretaria de fazenda", "receita estadual",
     "base de cálculo",
+    # Obrigações acessórias e benefícios (novas — mais meticuloso)
+    "sped", "efd", "cbenef", "código de benefício", "benefício fiscal",
+    "benefícios fiscais", "crédito presumido", "diferimento", "regime especial",
+    "confaz", "convênio icms", "protocolo icms",
+    # Pauta / valores de referência / fundos e leis RJ
+    "pauta", "pmpf", "preço médio ponderado", "valor de referência",
+    "fundo orçamentário temporário", "feef",
+    "9.025", "9025", "6.979", "6979",
 ]
 
 # Palavras curtas que exigem word boundary (para evitar "MEI" em "Meira", "ISS" em "Assessor")
 PALAVRAS_FISCAIS_WORD = [
-    r"\bicms\b", r"\biss\b", r"\bipva\b", r"\biof\b", r"\birpj\b",
-    r"\bcsll\b", r"\bpis\b", r"\bcofins\b", r"\bmei\b", r"\binss\b",
-    r"\bfgts\b", r"\bclt\b",
+    r"\bicms\b", r"\biss\b", r"\bissqn\b", r"\bipva\b", r"\biof\b", r"\birpj\b",
+    r"\bcsll\b", r"\bpis\b", r"\bcofins\b", r"\bipi\b", r"\bmei\b", r"\binss\b",
+    r"\bfgts\b", r"\bclt\b", r"\bfot\b",
 ]
 
 PALAVRAS_EXCLUIR = [
@@ -88,11 +96,27 @@ _N = r"N[O\xba\xb0o]"
 MARCADORES_ATO = re.compile(
     r"(?m)^\*?(DECRETO\s+" + _N + r"|"
     r"RESOLU[C\xc7][A\xc3]O\s+(?:SEFAZ|SER|CONJUNTA)?\s*" + _N + r"|"
-    r"PORTARIA\s+(?:SEFAZ|SUT[RI]*|SUPTRIB|CONJUNTA)?\s*" + _N + r"|"
+    r"PORTARIA\s+(?:SEFAZ|SUT[RI]*|SUPTRIB|SUPDIEF|SUCIEF|SAF|SER|CONJUNTA)?\s*" + _N + r"|"
     r"LEI\s+" + _N + r"|INSTRU[C\xc7][A\xc3]O\s+NORMATIVA\s+" + _N + r"|"
-    r"DELIBERA[C\xc7][A\xc3]O\s+" + _N + r"|DESPACHO\s+" + _N + r")\s*\d",
+    r"DELIBERA[C\xc7][A\xc3]O\s+" + _N + r"|DESPACHO\s+" + _N + r"|"
+    # Jurisprudência: Conselho de Contribuintes (acórdãos e recursos de ICMS)
+    r"AC[\xd3\xf3Oo]RD[\xc3\xe3Aa]O\s+" + _N + r"|RECURSO\s+" + _N + r")\s*\d",
     re.IGNORECASE
 )
+
+# Palavras que indicam ata/reunião de comissão fiscal (ex.: CPPDE da SEFAZ/CODIN,
+# enquadramento em tratamento tributário especial) OU jurisprudência (Conselho de
+# Contribuintes). Passam direto pelo filtro fiscal.
+MARCADORES_COMISSAO = [
+    "cppde", "reunião ordinária", "reuniao ordinaria",
+    "reunião extraordinária", "reuniao extraordinaria",
+    "tratamento tributário especial", "tratamento tributario especial",
+    "enquadramento", "codin",
+    # Jurisprudência
+    "conselho de contribuintes", "conselho pleno", "acórdão", "acordao",
+    "câmara julgadora", "camara julgadora", "recorrente", "recorrida",
+    "ementa:", "resposta à consulta", "resposta a consulta",
+]
 
 if _USE_CURL_CFFI:
     session = curl_requests.Session(impersonate="chrome124")
@@ -111,8 +135,16 @@ def data_para_base64(data_str: str) -> str:
     return base64.b64encode(data_sem_hifen.encode()).decode()
 
 
-def obter_link_parte_i(data_str: str) -> str | None:
-    """Acessa página de seleção e retorna o link de sessão da Parte I (Poder Executivo)."""
+def _abs_href(href: str) -> str:
+    if href.startswith("http"):
+        return href
+    return f"https://www.ioerj.com.br{href}" if href.startswith("/") else f"{BASE}/{href}"
+
+
+def obter_links_parte_i(data_str: str) -> list[str]:
+    """Retorna TODOS os links da Parte I (Poder Executivo) do dia, incluindo
+    suplementos / 2ª edição. Atas da CPPDE (SEFAZ/CODIN) costumam sair em edição
+    suplementar publicada mais tarde — por isso baixamos todas as edições listadas."""
     data_b64 = data_para_base64(data_str)
     url = f"{BASE}/do_seleciona_edicao.php?data={data_b64}"
     try:
@@ -120,60 +152,93 @@ def obter_link_parte_i(data_str: str) -> str | None:
         r.raise_for_status()
     except Exception as e:
         print(f"  IOERJ: erro ao acessar seleção: {e}", file=sys.stderr)
-        return None
+        return []
 
     html_text = r.text
     if "não foi publicado" in html_text.lower() or "não encontrado" in html_text.lower():
         print(f"  IOERJ: edição não publicada para {data_str}", file=sys.stderr)
-        return None
+        return []
 
     soup = BeautifulSoup(html_text, "html.parser")
 
-    # Busca link que contenha "Parte I" ou "Poder Executivo"
+    links: list[str] = []
     for a in soup.find_all("a", href=True):
         texto = a.get_text(strip=True).lower()
         href = a["href"]
-        if ("parte i" in texto or "poder executivo" in texto) and "mostra_edicao" in href:
-            # href pode ser relativo ou absoluto
-            if href.startswith("http"):
-                return href
-            return f"https://www.ioerj.com.br{href}" if href.startswith("/") else f"{BASE}/{href}"
+        if "mostra_edicao" not in href:
+            continue
+        # Aceita Parte I e suas variações (suplemento, 2ª edição, extra), mas
+        # exclui Parte IB (Tribunal de Contas), Parte II, IV e V.
+        eh_parte_i = ("poder executivo" in texto) or (
+            texto.startswith("parte i") and "parte ib" not in texto and "parte ii" not in texto
+            and "parte iv" not in texto and "parte v" not in texto
+        )
+        if eh_parte_i:
+            u = _abs_href(href)
+            if u not in links:
+                links.append(u)
+                print(f"  IOERJ: edição Parte I encontrada -> {texto[:50]!r}", file=sys.stderr)
 
-    # Fallback: pega primeiro link mostra_edicao
-    for a in soup.find_all("a", href=True):
-        if "mostra_edicao" in a["href"]:
-            href = a["href"]
-            if href.startswith("http"):
-                return href
-            return f"https://www.ioerj.com.br{href}" if href.startswith("/") else f"{BASE}/{href}"
+    if not links:
+        print(f"  IOERJ: nenhum link Parte I encontrado em {data_str}", file=sys.stderr)
+    return links
 
-    print(f"  IOERJ: link Parte I não encontrado na página de {data_str}", file=sys.stderr)
-    return None
+
+def obter_link_parte_i(data_str: str) -> str | None:
+    """Compatibilidade: retorna o primeiro link da Parte I (ou None)."""
+    links = obter_links_parte_i(data_str)
+    return links[0] if links else None
 
 
 def gerar_pdf(url_mostra: str) -> bytes | None:
-    """Acessa mostra_edicao.php para gerar tmp.pdf no servidor, depois baixa o PDF."""
+    """Baixa o PDF real da edição via navegador headless (Playwright).
+
+    IMPORTANTE: o IOERJ NÃO serve o PDF por requisição HTTP simples. O caminho
+    antigo `include/pdfjs/web/tmp.pdf` é um arquivo ESTÁTICO de 2016 (bug antigo),
+    e o endpoint `mostra_edicao.php?k=<pd>` responde vazio fora do visualizador.
+    Só o visualizador real (pdf.js no navegador) obtém o PDF. Por isso abrimos a
+    página no Chromium headless e interceptamos a resposta do `?k=` (o PDF real).
+    """
     try:
-        r = session.get(url_mostra, timeout=30)
-        r.raise_for_status()
+        from playwright.sync_api import sync_playwright
     except Exception as e:
-        print(f"  IOERJ: erro ao carregar mostra_edicao: {e}", file=sys.stderr)
+        print(f"  IOERJ: Playwright indisponível ({e}) — RJ não pode ser coletado.", file=sys.stderr)
         return None
 
-    # Aguarda geração do PDF no servidor
-    time.sleep(2)
-
-    pdf_url = f"{BASE}/include/pdfjs/web/tmp.pdf"
+    capturado = {}
     try:
-        r_pdf = session.get(pdf_url, timeout=60)
-        r_pdf.raise_for_status()
-        if r_pdf.headers.get("Content-Type", "").startswith("application/pdf") or r_pdf.content[:4] == b"%PDF":
-            return r_pdf.content
-        print(f"  IOERJ: tmp.pdf não é PDF válido (Content-Type: {r_pdf.headers.get('Content-Type')})", file=sys.stderr)
-        return None
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+
+            def on_resp(resp):
+                if "mostra_edicao.php?k=" in resp.url and "bytes" not in capturado:
+                    try:
+                        b = resp.body()
+                        if b[:4] == b"%PDF":
+                            capturado["bytes"] = b
+                    except Exception:
+                        pass
+
+            page.on("response", on_resp)
+            try:
+                page.goto(url_mostra, wait_until="networkidle", timeout=60000)
+            except Exception:
+                pass  # networkidle pode estourar em edições grandes; o PDF já pode ter vindo
+            # dá tempo do pdf.js requisitar o PDF
+            for _ in range(20):
+                if "bytes" in capturado:
+                    break
+                page.wait_for_timeout(1000)
+            browser.close()
     except Exception as e:
-        print(f"  IOERJ: erro ao baixar tmp.pdf: {e}", file=sys.stderr)
+        print(f"  IOERJ: erro no Playwright: {e}", file=sys.stderr)
         return None
+
+    if "bytes" not in capturado:
+        print("  IOERJ: não capturou PDF real pelo visualizador.", file=sys.stderr)
+        return None
+    return capturado["bytes"]
 
 
 def extrair_texto_pdf(pdf_bytes: bytes) -> str:
@@ -227,6 +292,13 @@ def extrair_texto_pdf(pdf_bytes: bytes) -> str:
 
 _RE_WORD = [re.compile(p, re.IGNORECASE) for p in PALAVRAS_FISCAIS_WORD]
 
+# Extrai cada acórdão do Conselho de Contribuintes: "Acórdão nº X - EMENTA: ..."
+_RE_ACORDAO = re.compile(
+    r"Ac[\xf3o]rd[\xe3a]o\s+n[\xba\xb0o]\s*([\d.]+)\s*[-–]?\s*EMENTA:?\s*"
+    r"([\s\S]{20,1800}?)(?=Ac[\xf3o]rd[\xe3a]o\s+n[\xba\xb0o]|Recurso\s+n[\xba\xb0o]|\n\s*Id:\s*\d|\Z)",
+    re.IGNORECASE,
+)
+
 
 def _eh_fiscal(texto_lower: str) -> bool:
     """Verifica se o bloco tem conteúdo fiscal/trabalhista relevante."""
@@ -259,13 +331,17 @@ def filtrar_texto(texto: str) -> list[dict]:
 
         bloco_lower = bloco.lower()
 
-        # Exclui atos claramente administrativos
-        if any(p in bloco_lower for p in PALAVRAS_EXCLUIR):
-            continue
-
         _cliente_rj = cliente_mencionado(bloco, TERMOS_CLIENTES)
         _eh_lei = bloco_lower.lstrip("*").startswith("lei ")
-        if not _eh_fiscal(bloco_lower) and not _cliente_rj and not _eh_lei:
+        _eh_comissao = any(m in bloco_lower for m in MARCADORES_COMISSAO)
+
+        # Exclui atos claramente administrativos — MAS nunca descarta lei,
+        # cliente citado ou jurisprudência/comissão (evita matar bloco fiscal
+        # grande só porque uma palavra administrativa apareceu no meio).
+        if any(p in bloco_lower for p in PALAVRAS_EXCLUIR) and not (_eh_lei or _cliente_rj or _eh_comissao):
+            continue
+
+        if not _eh_fiscal(bloco_lower) and not _cliente_rj and not _eh_lei and not _eh_comissao:
             continue
 
         linhas = [l.strip() for l in bloco.split("\n") if l.strip()]
@@ -313,6 +389,37 @@ def filtrar_texto(texto: str) -> list[dict]:
             "link": "",
         })
 
+    # ── Jurisprudência: extrai cada acórdão do Conselho de Contribuintes ──
+    # (os acórdãos ficam em blocos gigantes e o "Acórdão nº" aparece no meio da
+    #  linha, então são extraídos à parte, um registro por acórdão.)
+    numeros_existentes = {r["numero_ato"] for r in resultados}
+    for m in _RE_ACORDAO.finditer(texto):
+        num = re.sub(r"\s+", "", m.group(1))
+        ementa = re.sub(r"\s+", " ", m.group(2)).strip()
+        if len(ementa) < 20:
+            continue
+        numero_ato = f"Acórdão nº {num} (Conselho de Contribuintes RJ)"
+        if numero_ato in numeros_existentes:
+            continue
+        numeros_existentes.add(numero_ato)
+        # tributo pela ementa
+        el = ementa.lower()
+        tributo = "ICMS" if "icms" in el else ("ITD/ITCMD" if ("itd" in el or "itcmd" in el) else "Tributário")
+        resultados.append({
+            "_aba": "DOERJ",
+            "_empresa": cliente_mencionado(ementa, TERMOS_CLIENTES),
+            "_termo_busca": f"Acórdão {num}",
+            "data": "",
+            "numero_ato": numero_ato,
+            "ato_alterado": "",
+            "resumo": f"EMENTA: {ementa[:1800]}",
+            "orgao": "Conselho de Contribuintes - SEFAZ-RJ",
+            "prazo": "",
+            "tributo_materia": tributo,
+            "numero_doc": "",
+            "link": "",
+        })
+
     return resultados
 
 
@@ -326,35 +433,45 @@ def coletar_doe_rj(data_str: str = None) -> list:
         print("  IOERJ: instale pdfminer.six ou pypdf para extrair texto do PDF", file=sys.stderr)
         return []
 
-    # 1. Obter link da Parte I
-    url_mostra = obter_link_parte_i(data_str)
-    if not url_mostra:
+    # 1. Obter TODOS os links da Parte I (edição principal + suplementos)
+    urls = obter_links_parte_i(data_str)
+    if not urls:
         return []
-    print(f"  Link Parte I: {url_mostra[:80]}...", file=sys.stderr)
+    print(f"  {len(urls)} edição(ões) Parte I para baixar", file=sys.stderr)
 
-    # 2. Gerar e baixar PDF
-    pdf_bytes = gerar_pdf(url_mostra)
-    if not pdf_bytes:
-        return []
-    print(f"  PDF baixado: {len(pdf_bytes):,} bytes", file=sys.stderr)
+    resultados = []
+    for idx, url_mostra in enumerate(urls, 1):
+        print(f"  [{idx}/{len(urls)}] {url_mostra[:80]}...", file=sys.stderr)
 
-    # 3. Extrair texto
-    texto = extrair_texto_pdf(pdf_bytes)
-    # Normaliza separadores de página e retornos de carro
-    texto = texto.replace("\f", "\n").replace("\r\n", "\n").replace("\r", "\n")
-    if not texto.strip():
-        print("  IOERJ: texto vazio após extração do PDF", file=sys.stderr)
-        return []
-    print(f"  Texto extraído: {len(texto):,} caracteres", file=sys.stderr)
+        pdf_bytes = gerar_pdf(url_mostra)
+        if not pdf_bytes:
+            continue
+        print(f"    PDF baixado: {len(pdf_bytes):,} bytes", file=sys.stderr)
 
-    # 4. Filtrar atos relevantes
-    resultados = filtrar_texto(texto)
-    for reg in resultados:
-        reg["data"] = data_str
-        reg["link"] = url_mostra
+        texto = extrair_texto_pdf(pdf_bytes)
+        texto = texto.replace("\f", "\n").replace("\r\n", "\n").replace("\r", "\n")
+        if not texto.strip():
+            print("    IOERJ: texto vazio após extração", file=sys.stderr)
+            continue
+        print(f"    Texto extraído: {len(texto):,} caracteres", file=sys.stderr)
 
-    print(f"  DOE-RJ filtrado: {len(resultados)} atos relevantes", file=sys.stderr)
-    return resultados
+        atos = filtrar_texto(texto)
+        for reg in atos:
+            reg["data"] = data_str
+            reg["link"] = url_mostra
+        resultados.extend(atos)
+
+    # Deduplica por número do ato + início do resumo (edições podem repetir)
+    vistos = set()
+    unicos = []
+    for r in resultados:
+        chave = (r["numero_ato"][:100], r["resumo"][:120])
+        if chave not in vistos:
+            vistos.add(chave)
+            unicos.append(r)
+
+    print(f"  DOE-RJ filtrado: {len(unicos)} atos relevantes", file=sys.stderr)
+    return unicos
 
 
 def main():

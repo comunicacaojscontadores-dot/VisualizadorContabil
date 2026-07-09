@@ -220,13 +220,19 @@ export const uploadDemonstrativo = createServerFn({ method: "POST" })
       console.log("[uploadDemonstrativo] text length", text.length);
 
       const ai = createGemini();
-      const { text: jsonText } = await generateText({
-        model: ai("gemini-2.0-flash"),
-        messages: [
-          { role: "system", content: prompt },
-          { role: "user", content: text.slice(0, 60_000) },
-        ],
-      });
+      const aiTimeout = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error("Tempo limite da IA excedido (25s). Tente um documento menor.")), 25_000)
+      );
+      const { text: jsonText } = await Promise.race([
+        generateText({
+          model: ai("gemini-2.0-flash"),
+          messages: [
+            { role: "system", content: prompt },
+            { role: "user", content: text.slice(0, 40_000) },
+          ],
+        }),
+        aiTimeout,
+      ]);
       console.log("[uploadDemonstrativo] ai response chars", jsonText.length);
 
 
@@ -256,10 +262,19 @@ export const uploadDemonstrativo = createServerFn({ method: "POST" })
       const msg = e instanceof Error ? e.message : "Erro de processamento";
       console.error("[uploadDemonstrativo] error", msg, e);
 
-      await context.supabase
-        .from("demonstrativos")
-        .update({ status: "erro", erro_mensagem: msg })
-        .eq("id", created.id);
+      // Usa admin client para garantir que o update funciona mesmo com token expirado
+      try {
+        const { supabaseAdmin } = await import("@/integrations/supabase/client.server");
+        await supabaseAdmin
+          .from("demonstrativos")
+          .update({ status: "erro", erro_mensagem: msg })
+          .eq("id", created.id);
+      } catch {
+        await context.supabase
+          .from("demonstrativos")
+          .update({ status: "erro", erro_mensagem: msg })
+          .eq("id", created.id);
+      }
       throw new Error(msg);
     }
   });

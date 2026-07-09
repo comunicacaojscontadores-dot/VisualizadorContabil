@@ -1,5 +1,5 @@
 import "@/styles/public-report.css";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { DemoData, LineItem } from "@/lib/demo-types";
 
 type Cliente = {
@@ -152,7 +152,60 @@ export function PublicReport({ dados, cliente, competencia, publishedAt }: Props
   const totalAtivo = bp?.ativo?.filter(r => r.tipo !== "grupo").reduce((s, r) => s + (r.tipo === "subtotal" ? 0 : r.valor ?? 0), 0) ?? 0;
   const totalAtivoAnt = bp?.ativo?.filter(r => r.tipo !== "grupo").reduce((s, r) => s + (r.tipo === "subtotal" ? 0 : r.valor_ant ?? 0), 0) ?? 0;
 
-  const lucroNeg = (kpis.lucro ?? 0) < 0;
+  // ── KPIs derivados da DRE e BP ─────────────────────────────────
+  const findRow = (rows: LineItem[] | undefined, kws: string[]) =>
+    rows?.find((r) => kws.every((k) => r.item.toLowerCase().includes(k)));
+  const sumRows = (rows?: LineItem[]) => rows?.reduce((s, r) => s + (r.valor || 0), 0) ?? 0;
+
+  const receitaLiquida =
+    findRow(dre, ["receita", "líquida"])?.valor ??
+    findRow(dre, ["receita", "liquida"])?.valor ??
+    dre.filter((r) => r.tipo === "receita").reduce((s, r) => s + r.valor, 0) ||
+    kpis.faturamento;
+
+  const lucroLiquido =
+    findRow(dre, ["lucro", "líquido"])?.valor ??
+    findRow(dre, ["lucro", "liquido"])?.valor ??
+    dre.find((r) => r.tipo === "resultado")?.valor ??
+    kpis.lucro;
+
+  const patrimonioLiquido = bp?.patrimonio_liquido ? sumRows(bp.patrimonio_liquido) : undefined;
+  const margem = receitaLiquida && lucroLiquido != null ? (lucroLiquido / receitaLiquida) * 100 : null;
+
+  // Índices de liquidez
+  const matchVal = (rows: LineItem[], inc: string[], exc: string[] = []) =>
+    rows.filter((r) => { const t = r.item.toLowerCase(); return inc.every((w) => t.includes(w)) && exc.every((w) => !t.includes(w)); })
+        .reduce((s, r) => s + r.valor, 0);
+  const ativos = bp?.ativo ?? [];
+  const passivos = bp?.passivo ?? [];
+  const ativoCirc = matchVal(ativos, ["circulante"], ["não", "nao"]);
+  const ativoNaoCirc = matchVal(ativos, ["não", "circulante"]) || matchVal(ativos, ["nao", "circulante"]);
+  const estoques = matchVal(ativos, ["estoque"]);
+  const caixa = matchVal(ativos, ["caixa"]) || matchVal(ativos, ["equivalente"]);
+  const passivoCirc = matchVal(passivos, ["circulante"], ["não", "nao"]);
+  const passivoNaoCirc = matchVal(passivos, ["não", "circulante"]) || matchVal(passivos, ["nao", "circulante"]);
+
+  const lc = passivoCirc ? ativoCirc / passivoCirc : null;
+  const ls = passivoCirc ? (ativoCirc - estoques) / passivoCirc : null;
+  const li = passivoCirc ? caixa / passivoCirc : null;
+  const lg = (passivoCirc + passivoNaoCirc) ? (ativoCirc + ativoNaoCirc) / (passivoCirc + passivoNaoCirc) : null;
+
+  const liqIndices = [
+    { label: "Liquidez Corrente", value: lc, good: 1.5, warn: 1.0, desc: "Saudável ≥ 1,50 · Atenção ≥ 1,00" },
+    { label: "Liquidez Seca", value: ls, good: 1.0, warn: 0.7, desc: "Saudável ≥ 1,00 · Atenção ≥ 0,70" },
+    { label: "Liquidez Imediata", value: li, good: 0.3, warn: 0.15, desc: "Saudável ≥ 0,30 · Atenção ≥ 0,15" },
+    { label: "Liquidez Geral", value: lg, good: 1.0, warn: 0.7, desc: "Saudável ≥ 1,00 · Atenção ≥ 0,70" },
+  ];
+  const liqMedia = (() => {
+    const vs = liqIndices.map((x) => x.value).filter((v): v is number => typeof v === "number" && isFinite(v));
+    return vs.length ? vs.reduce((s, v) => s + v, 0) / vs.length : null;
+  })();
+
+  const liqStatus = (v: number | null, good: number, warn: number) =>
+    v == null ? "muted" : v >= good ? "green" : v >= warn ? "amber" : "red";
+
+  const lucroNeg = (lucroLiquido ?? 0) < 0;
+  const [liqOpen, setLiqOpen] = useState(false);
 
   // Nav links
   const navLinks = [
@@ -214,49 +267,87 @@ export function PublicReport({ dados, cliente, competencia, publishedAt }: Props
             </div>
           </div>
 
-          {/* KPIs */}
-          {(kpis.faturamento != null || kpis.lucro != null || kpis.impostos != null || kpis.folha != null) && (
-            <div className="pr-kpi-grid no-print">
-              {kpis.faturamento != null && (
-                <div className="pr-kpi-card">
-                  <div className="pr-kpi-card__top">
-                    <div className="pr-kpi-card__label">Receita Líquida</div>
-                    <div className="pr-kpi-card__icon icon-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+          {/* KPIs + Liquidez */}
+          {(receitaLiquida != null || lucroLiquido != null || patrimonioLiquido != null || liqMedia != null) && (
+            <div className="no-print">
+              <div className="pr-kpi-grid">
+                {receitaLiquida != null && (
+                  <div className="pr-kpi-card">
+                    <div className="pr-kpi-card__top">
+                      <div className="pr-kpi-card__label">Receita Líquida</div>
+                      <div className="pr-kpi-card__icon icon-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg></div>
+                    </div>
+                    <div className="pr-kpi-card__value">{fmtBRL(receitaLiquida)}</div>
+                    <div className="pr-kpi-card__note">Receita do período</div>
                   </div>
-                  <div className="pr-kpi-card__value">{fmtBRL(kpis.faturamento)}</div>
-                  <div className="pr-kpi-card__note">Receita bruta do período</div>
-                </div>
-              )}
-              {kpis.lucro != null && (
-                <div className="pr-kpi-card">
-                  <div className="pr-kpi-card__top">
-                    <div className="pr-kpi-card__label">Resultado Líquido</div>
-                    <div className={`pr-kpi-card__icon ${lucroNeg ? "icon-red" : "icon-green"}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                )}
+                {lucroLiquido != null && (
+                  <div className="pr-kpi-card">
+                    <div className="pr-kpi-card__top">
+                      <div className="pr-kpi-card__label">Lucro Líquido</div>
+                      <div className={`pr-kpi-card__icon ${lucroNeg ? "icon-red" : "icon-green"}`}><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div>
+                    </div>
+                    <div className={`pr-kpi-card__value ${lucroNeg ? "danger" : "success"}`}>
+                      {lucroNeg ? `(${fmtBRL(Math.abs(lucroLiquido))})` : fmtBRL(lucroLiquido)}
+                    </div>
+                    {margem != null && <div className="pr-kpi-card__note">Margem {margem.toFixed(1)}%</div>}
                   </div>
-                  <div className={`pr-kpi-card__value ${lucroNeg ? "danger" : "success"}`}>
-                    {lucroNeg ? `(${fmtBRL(Math.abs(kpis.lucro!))})` : fmtBRL(kpis.lucro)}
+                )}
+                {patrimonioLiquido != null && (
+                  <div className="pr-kpi-card">
+                    <div className="pr-kpi-card__top">
+                      <div className="pr-kpi-card__label">Patrimônio Líquido</div>
+                      <div className="pr-kpi-card__icon icon-navy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="22" x2="21" y2="22"/><rect x="2" y="9" width="4" height="13"/><rect x="10" y="5" width="4" height="17"/><rect x="18" y="2" width="4" height="20"/></svg></div>
+                    </div>
+                    <div className="pr-kpi-card__value">{fmtBRL(patrimonioLiquido)}</div>
+                    <div className="pr-kpi-card__note">Total do patrimônio</div>
                   </div>
-                  <div className="pr-kpi-card__note">Lucro/Prejuízo do exercício</div>
-                </div>
-              )}
-              {kpis.impostos != null && (
-                <div className="pr-kpi-card">
-                  <div className="pr-kpi-card__top">
-                    <div className="pr-kpi-card__label">Impostos</div>
-                    <div className="pr-kpi-card__icon icon-navy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="3" y1="22" x2="21" y2="22"/><rect x="2" y="9" width="4" height="13"/><rect x="10" y="5" width="4" height="17"/><rect x="18" y="2" width="4" height="20"/></svg></div>
+                )}
+                {liqMedia != null && (
+                  <button className="pr-kpi-card pr-kpi-liq-btn" onClick={() => setLiqOpen((o) => !o)}>
+                    <div className="pr-kpi-card__top">
+                      <div className="pr-kpi-card__label">Índices de Liquidez</div>
+                      <div className="pr-kpi-card__icon icon-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+                    </div>
+                    <div className="pr-kpi-liq-media">
+                      <span className={`pr-kpi-liq-val liq-${liqStatus(liqMedia, 1.2, 0.9)}`}>{liqMedia.toFixed(2)}</span>
+                      <span className={`pr-kpi-liq-badge liq-${liqStatus(liqMedia, 1.2, 0.9)}`}>
+                        {liqStatus(liqMedia, 1.2, 0.9) === "green" ? "SAUDÁVEL" : liqStatus(liqMedia, 1.2, 0.9) === "amber" ? "ATENÇÃO" : "CRÍTICO"}
+                      </span>
+                    </div>
+                    <div className="pr-kpi-card__note">Média dos 4 índices · {liqOpen ? "Recolher ▲" : "Ver detalhes ▼"}</div>
+                  </button>
+                )}
+              </div>
+
+              {/* Painel de liquidez expandível */}
+              {liqOpen && liqMedia != null && (
+                <div className="pr-liq-panel">
+                  <div className="pr-liq-panel__title">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{width:14,height:14}}><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+                    Painel de Índices de Liquidez
                   </div>
-                  <div className="pr-kpi-card__value">{fmtBRL(kpis.impostos)}</div>
-                  <div className="pr-kpi-card__note">Carga tributária total</div>
-                </div>
-              )}
-              {kpis.folha != null && (
-                <div className="pr-kpi-card">
-                  <div className="pr-kpi-card__top">
-                    <div className="pr-kpi-card__label">Folha de Pagamento</div>
-                    <div className="pr-kpi-card__icon icon-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg></div>
+                  <div className="pr-liq-grid">
+                    {liqIndices.map((ix) => {
+                      const st = liqStatus(ix.value, ix.good, ix.warn);
+                      return (
+                        <div key={ix.label} className="pr-liq-card">
+                          <div className="pr-liq-card__top">
+                            <span className="pr-liq-card__label">{ix.label.toUpperCase()}</span>
+                            <span className={`pr-liq-dot liq-dot-${st}`} />
+                          </div>
+                          <div className="pr-liq-card__row">
+                            <span className={`pr-liq-card__val liq-${st}`}>{ix.value != null ? ix.value.toFixed(2) : "—"}</span>
+                            <span className={`pr-liq-card__status liq-${st}`}>
+                              {st === "green" ? "SAUDÁVEL" : st === "amber" ? "ATENÇÃO" : "CRÍTICO"}
+                            </span>
+                          </div>
+                          <div className="pr-liq-card__desc">{ix.desc}</div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  <div className="pr-kpi-card__value">{fmtBRL(kpis.folha)}</div>
-                  <div className="pr-kpi-card__note">Salários e encargos</div>
+                  <div className="pr-liq-footnote">Benchmark indicativo. Verde: saudável · Amarelo: atenção · Vermelho: abaixo do mínimo.</div>
                 </div>
               )}
             </div>

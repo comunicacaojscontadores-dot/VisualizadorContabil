@@ -22,8 +22,18 @@ SP_API  = f"{SP_BASE}/_api/web/lists/getbytitle('P%C3%A1ginas')/items"
 TIPOS_OK = [
     "Portaria CAT", "Portaria SRE", "Portaria SFP",
     "Resolução SFP", "Comunicado CAT", "Comunicado DICAR",
-    "Decisão Normativa CAT", "Decreto", "Instrução Normativa",
+    "Decisão Normativa CAT", "Decreto", "Lei", "Instrução Normativa",
     "IN SRE", "Portaria DICAR", "Portaria DIATP",
+]
+
+# Palavras-chave fiscais que garantem inclusão mesmo se o tipo não casar
+PALAVRAS_FISCAIS = [
+    "icms", "ipi", "iss", "issqn", "pis", "cofins", "irpj", "csll", "iof", "ipva",
+    "itcmd", "tribut", "fiscal", "imposto", "alíquota", "isenção", "diferimento",
+    "substituição tributária", "crédito presumido", "benefício fiscal", "cbenef",
+    "código de benefício", "sped", "efd", "nota fiscal", "regime especial",
+    "convênio icms", "confaz", "simples nacional", "base de cálculo",
+    "pauta", "pmpf", "preço médio ponderado", "valor de referência", "9.025", "6.979",
 ]
 
 PALAVRAS_EXCLUIR = [
@@ -45,14 +55,17 @@ def eh_relevante(titulo: str) -> bool:
     titulo_lower = titulo.lower()
     if any(p in titulo_lower for p in PALAVRAS_EXCLUIR):
         return False
-    # Aceita se o título começa com tipo de ato tributário
-    return any(t.lower() in titulo_lower for t in TIPOS_OK)
+    # Aceita se o título começa com tipo de ato tributário...
+    if any(t.lower() in titulo_lower for t in TIPOS_OK):
+        return True
+    # ...ou se contém palavra-chave fiscal (pega Leis/atos com outro rótulo)
+    return any(p in titulo_lower for p in PALAVRAS_FISCAIS)
 
 
 def extrair_texto_sp(link: str) -> str:
     """Busca o texto do ato na página ASPX do SEFAZ-SP."""
     try:
-        r = session.get(link, timeout=20)
+        r = session.get(link, timeout=45)
         r.raise_for_status()
         body = r.text
         m = re.search(r'ms-rtestate-field[^>]*>(.*?)</div>', body, re.DOTALL | re.IGNORECASE)
@@ -78,16 +91,25 @@ def buscar_pagina(data_str: str, skip_token: str = None) -> tuple[list, str | No
     if skip_token:
         url = skip_token  # next page URL completa
 
-    try:
-        r = session.get(url if skip_token else SP_API, params=None if skip_token else params, timeout=20)
-        r.raise_for_status()
-        data = r.json()
-        items = data.get("d", {}).get("results", [])
-        next_url = data.get("d", {}).get("__next")
-        return items, next_url
-    except Exception as e:
-        print(f"  Erro SP API: {e}", file=sys.stderr)
-        return [], None
+    # O servidor do SEFAZ-SP costuma ser lento — timeout maior + retry com backoff
+    for tentativa in range(4):
+        try:
+            r = session.get(url if skip_token else SP_API,
+                            params=None if skip_token else params, timeout=60)
+            r.raise_for_status()
+            data = r.json()
+            items = data.get("d", {}).get("results", [])
+            next_url = data.get("d", {}).get("__next")
+            return items, next_url
+        except Exception as e:
+            if tentativa < 3:
+                espera = 10 * (tentativa + 1)
+                print(f"  SP API tentativa {tentativa+1}/4 falhou ({e}) — aguardando {espera}s...", file=sys.stderr)
+                time.sleep(espera)
+            else:
+                print(f"  Erro SP API (esgotadas 4 tentativas): {e}", file=sys.stderr)
+                return [], None
+    return [], None
 
 
 def coletar_doe_sp(data_str: str = None) -> list:
@@ -106,7 +128,10 @@ def coletar_doe_sp(data_str: str = None) -> list:
         pagina += 1
         if next_url:
             time.sleep(0.3)
-        if pagina > 10:  # segurança
+        if pagina >= 40:  # teto de segurança (40 x 50 = 2000 itens/dia)
+            if next_url:
+                print(f"  *** AVISO DOE-SP: atingiu teto de {pagina} páginas e AINDA HÁ MAIS "
+                      f"itens — pode ter truncado! Aumentar o teto.", file=sys.stderr)
             break
 
     print(f"  {len(todos_items)} atos encontrados para {data_str}", file=sys.stderr)
