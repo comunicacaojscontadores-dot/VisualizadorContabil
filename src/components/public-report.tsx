@@ -160,8 +160,7 @@ export function PublicReport({ dados, cliente, competencia, publishedAt }: Props
   const receitaLiquida =
     findRow(dre, ["receita", "líquida"])?.valor ??
     findRow(dre, ["receita", "liquida"])?.valor ??
-    dre.filter((r) => r.tipo === "receita").reduce((s, r) => s + r.valor, 0) ||
-    kpis.faturamento;
+    (dre.filter((r) => r.tipo === "receita").reduce((s, r) => s + r.valor, 0) || kpis.faturamento);
 
   const lucroLiquido =
     findRow(dre, ["lucro", "líquido"])?.valor ??
