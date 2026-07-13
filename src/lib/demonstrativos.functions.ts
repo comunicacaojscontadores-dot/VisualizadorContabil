@@ -213,7 +213,7 @@ export const uploadDemonstrativo = createServerFn({ method: "POST" })
         prompt = BALANCETE_PROMPT;
       } else {
         const mammoth = await import("mammoth");
-        const { value } = await mammoth.extractRawText({ buffer: Buffer.from(buf) });
+        const { value } = await mammoth.extractRawText({ arrayBuffer: buf.buffer as ArrayBuffer });
         text = value;
         prompt = EXTRACTION_PROMPT;
       }
