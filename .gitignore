@@ -33,3 +33,31 @@ dist-ssr
 
 # Automação Python separada em repositório próprio
 agente-diarios/
+
+# Backups do .dev.vars — contêm tokens
+.dev.vars.bak*
+
+# ── Outros projetos que moram nesta pasta, cada um com vida própria ──
+# Somam mais de 1 GB e não pertencem ao ContabilConnect.
+imersao-reforma/
+jsacademy/
+termometro/
+instituto/
+motion/
+aniversariantes-agosto/
+email-20-anos/
+scraper-leads/
+scraper-conteudo-social/
+*.zip
+!distribuicao/skill-contabilconnect.zip
+
+# Build do app desktop (gerado por electron-builder)
+dist-electron/
+
+# Temporários do CLI do Supabase
+supabase/.temp/
+
+# Rascunhos locais
+test-extract.mjs
+sinais_manuais.txt
+criar-atalho.ps1

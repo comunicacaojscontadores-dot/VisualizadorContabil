@@ -81,6 +81,7 @@ function DashboardPage() {
 export function StatusBadge({ status }: { status: string }) {
   const map: Record<string, { label: string; cls: string; icon: typeof Clock }> = {
     processando: { label: "Processando", cls: "bg-warning/15 text-warning border-warning/30", icon: Clock },
+    rascunho: { label: "Rascunho", cls: "bg-blue-500/15 text-blue-500 border-blue-500/30", icon: Clock },
     pendente: { label: "Pendente", cls: "bg-chart-5/15 text-chart-5 border-chart-5/30", icon: Clock },
     publicado: { label: "Publicado", cls: "bg-success/15 text-success border-success/30", icon: CheckCircle2 },
     erro: { label: "Erro", cls: "bg-destructive/15 text-destructive border-destructive/30", icon: AlertTriangle },

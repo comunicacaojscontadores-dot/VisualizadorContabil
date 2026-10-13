@@ -1,24 +1,30 @@
 /* ── Reset parcial ── */
 .pr-root *, .pr-cover * { box-sizing: border-box; }
 
-/* ── Variáveis ── */
+/* ── Variáveis (paleta CodePen BELMAX) ── */
 .pr-root {
-  --ink: #0f1b3d;
-  --ink-soft: #4a5568;
-  --muted: #94a3b8;
-  --accent: #1e3a6e;
-  --accent-mid: #2563eb;
-  --gold: #b8963e;
-  --danger: #dc2626;
-  --success: #16a34a;
-  --border: #e2e8f0;
-  --bg: #f1f5f9;
+  --page-hero: #46539a;
+  --accent: #5264d7;
+  --accent-mid: #6a6eb6;
+  --ink: #182246;
+  --paper: #f4f5fb;
+  --muted: #6d789e;
+  --border: #dde0f0;
   --surface: #ffffff;
-  --shadow-card: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
-  --radius: 12px;
+  --danger: #e36b74;
+  /* Paleta lida do Word oficial (ZARB 31/12/2025): o corpo do relatório repete
+     exatamente o que está no documento impresso. O cabeçalho mantém a sua. */
+  --doc-azul: #002060;    /* títulos, grupos, totais e cabeçalhos de tabela */
+  --doc-grifo: #d9e1f2;   /* fundo das linhas de saldo/mutação */
+  --doc-cinza: #808080;   /* "as notas explicativas são parte integrante" */
+  --doc-fonte: 'Times New Roman', Times, Georgia, serif;
+  --success: #43c78a;
+  --warn: #f4a942;
+  --shadow-card: 0 2px 12px rgba(70,83,154,.10), 0 1px 3px rgba(70,83,154,.06);
+  --radius: 14px;
 
-  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  background: var(--bg);
+  font-family: 'Instrument Sans', 'Inter', system-ui, sans-serif;
+  background: var(--paper);
   color: var(--ink);
   line-height: 1.6;
   min-height: 100vh;
@@ -33,12 +39,12 @@
 
 /* ── CABEÇALHO ── */
 .pr-header {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: linear-gradient(135deg, var(--page-hero) 0%, var(--accent) 100%);
   border-radius: var(--radius);
-  box-shadow: var(--shadow-card);
-  padding: 24px 28px 20px;
+  box-shadow: 0 6px 32px rgba(70,83,154,.28);
+  padding: 28px 32px 24px;
   margin-bottom: 16px;
+  color: #fff;
 }
 .pr-header__top {
   display: flex;
@@ -46,46 +52,47 @@
   justify-content: space-between;
   gap: 16px;
 }
-.pr-header__left { display: flex; align-items: flex-start; gap: 14px; }
+.pr-header__left { display: flex; align-items: flex-start; gap: 16px; }
 
 .pr-header__icon {
-  width: 52px; height: 52px;
-  border-radius: 12px;
+  width: 56px; height: 56px;
+  border-radius: 14px;
   overflow: hidden;
   flex-shrink: 0;
-  background: var(--accent);
+  background: rgba(255,255,255,0.18);
+  border: 2px solid rgba(255,255,255,0.35);
   display: flex; align-items: center; justify-content: center;
-  border: 1px solid rgba(0,0,0,0.06);
+  backdrop-filter: blur(6px);
 }
 .pr-header__icon img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .pr-header__initials {
   color: #fff;
   font-weight: 800;
-  font-size: 16px;
+  font-size: 18px;
   letter-spacing: -0.02em;
 }
 
 .pr-header__meta {
   font-size: 11px; font-weight: 600;
-  letter-spacing: 0.1em; text-transform: uppercase;
-  color: var(--muted); margin-bottom: 4px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: rgba(255,255,255,0.65); margin-bottom: 4px;
 }
 .pr-header__name {
   font-size: clamp(1.6rem, 3vw, 2.4rem);
   font-weight: 800; letter-spacing: -0.04em;
-  color: var(--ink); line-height: 1;
+  color: #fff; line-height: 1;
 }
 .pr-header__sub {
   display: flex; flex-wrap: wrap; align-items: center;
-  gap: 4px 16px; margin-top: 6px;
-  font-size: 13px; color: var(--ink-soft);
+  gap: 4px 16px; margin-top: 8px;
+  font-size: 13px; color: rgba(255,255,255,0.80);
 }
 .pr-header__sub-item { display: flex; align-items: center; gap: 5px; }
-.pr-header__sub-item svg { width: 13px; height: 13px; color: var(--muted); flex-shrink: 0; }
-.pr-header__sub-item strong { color: var(--ink); font-weight: 700; }
+.pr-header__sub-item svg { width: 13px; height: 13px; color: rgba(255,255,255,0.60); flex-shrink: 0; }
+.pr-header__sub-item strong { color: #fff; font-weight: 700; }
 .pr-header__rule {
   width: 56px; height: 3px; border-radius: 2px;
-  background: var(--gold); margin-top: 12px;
+  background: rgba(255,255,255,0.40); margin-top: 14px;
 }
 .pr-header__actions {
   display: flex; align-items: center; gap: 10px; flex-shrink: 0;
@@ -94,21 +101,22 @@
 /* ── BOTÕES ── */
 .pr-btn {
   display: inline-flex; align-items: center; gap: 7px;
-  padding: 9px 16px; border-radius: 8px;
-  font-size: 13px; font-weight: 500;
+  padding: 9px 18px; border-radius: 9px;
+  font-size: 13px; font-weight: 600;
   cursor: pointer;
-  border: 1px solid var(--border);
-  background: var(--surface); color: var(--ink-soft);
+  border: 1.5px solid rgba(255,255,255,0.35);
+  background: rgba(255,255,255,0.15); color: #fff;
   text-decoration: none;
-  transition: background 150ms, border-color 150ms, color 150ms;
+  transition: background 150ms, border-color 150ms;
   font-family: inherit;
+  backdrop-filter: blur(6px);
 }
 .pr-btn svg { width: 14px; height: 14px; }
-.pr-btn:hover { background: var(--bg); border-color: #c8d5e8; color: var(--ink); }
+.pr-btn:hover { background: rgba(255,255,255,0.28); border-color: rgba(255,255,255,0.55); }
 .pr-btn.primary {
-  background: var(--ink); color: #fff; border-color: var(--ink);
+  background: #fff; color: var(--accent); border-color: transparent;
 }
-.pr-btn.primary:hover { background: #1a2f5a; }
+.pr-btn.primary:hover { background: #f0f2ff; }
 
 /* ── KPI CARDS ── */
 .pr-kpi-grid {
@@ -119,36 +127,37 @@
 }
 .pr-kpi-card {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-card);
-  padding: 18px 20px 16px;
+  padding: 20px 22px 18px;
 }
 .pr-kpi-card__top {
   display: flex; align-items: center; justify-content: space-between;
-  margin-bottom: 10px;
+  margin-bottom: 12px;
 }
 .pr-kpi-card__label {
   font-size: 10px; font-weight: 700;
-  letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted);
+  letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted);
 }
 .pr-kpi-card__icon {
-  width: 32px; height: 32px; border-radius: 8px;
+  width: 34px; height: 34px; border-radius: 9px;
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
 .pr-kpi-card__icon svg { width: 16px; height: 16px; }
-.icon-blue  { background: #eff6ff; color: #2563eb; }
-.icon-red   { background: #fef2f2; color: #dc2626; }
-.icon-navy  { background: #eef2ff; color: #3730a3; }
-.icon-green { background: #f0fdf4; color: #16a34a; }
-.icon-amber { background: #fffbeb; color: #d97706; }
+.icon-blue  { background: rgba(82,100,215,.12); color: var(--accent); }
+.icon-red   { background: rgba(227,107,116,.12); color: var(--danger); }
+.icon-navy  { background: rgba(70,83,154,.12); color: var(--page-hero); }
+.icon-green { background: rgba(67,199,138,.12); color: var(--success); }
+.icon-amber { background: rgba(244,169,66,.12); color: var(--warn); }
 
 .pr-kpi-card__value {
   font-size: 1.75rem; font-weight: 800;
   letter-spacing: -0.05em; line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: var(--ink); margin-bottom: 4px;
+  font-family: 'Instrument Sans', system-ui, sans-serif;
+  color: var(--ink); margin-bottom: 5px;
 }
 .pr-kpi-card__value.danger  { color: var(--danger); }
 .pr-kpi-card__value.success { color: var(--success); }
@@ -158,27 +167,27 @@
 .pr-kpi-liq-btn {
   text-align: left; cursor: pointer;
   font-family: inherit; background: var(--surface);
-  border: 1px solid var(--border); border-radius: var(--radius);
-  box-shadow: var(--shadow); padding: 18px 20px 16px;
+  border: 1.5px solid var(--border); border-radius: var(--radius);
+  box-shadow: var(--shadow-card); padding: 20px 22px 18px;
   transition: border-color 150ms;
 }
-.pr-kpi-liq-btn:hover { border-color: #bfdbfe; }
-.pr-kpi-liq-media { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
+.pr-kpi-liq-btn:hover { border-color: var(--accent-mid); }
+.pr-kpi-liq-media { display: flex; align-items: baseline; gap: 8px; margin-bottom: 5px; }
 .pr-kpi-liq-val { font-size: 1.75rem; font-weight: 800; letter-spacing: -.05em; line-height: 1; font-variant-numeric: tabular-nums; }
-.pr-kpi-liq-badge { font-size: 10px; font-weight: 800; letter-spacing: .1em; padding: 2px 7px; border-radius: 999px; }
+.pr-kpi-liq-badge { font-size: 10px; font-weight: 800; letter-spacing: .1em; padding: 2px 8px; border-radius: 999px; }
 .liq-green { color: var(--success); }
-.liq-amber { color: #d97706; }
+.liq-amber { color: var(--warn); }
 .liq-red   { color: var(--danger); }
 .liq-muted { color: var(--muted); }
-.pr-kpi-liq-badge.liq-green { background: #f0fdf4; }
-.pr-kpi-liq-badge.liq-amber { background: #fffbeb; }
-.pr-kpi-liq-badge.liq-red   { background: #fef2f2; }
+.pr-kpi-liq-badge.liq-green { background: rgba(67,199,138,.12); }
+.pr-kpi-liq-badge.liq-amber { background: rgba(244,169,66,.12); }
+.pr-kpi-liq-badge.liq-red   { background: rgba(227,107,116,.12); }
 
 /* Painel liquidez */
 .pr-liq-panel {
-  background: var(--surface); border: 1px solid var(--border);
-  border-radius: var(--radius); box-shadow: var(--shadow);
-  padding: 20px 24px; margin-bottom: 16px;
+  background: var(--surface); border: 1.5px solid var(--border);
+  border-radius: var(--radius); box-shadow: var(--shadow-card);
+  padding: 22px 26px; margin-bottom: 16px;
 }
 .pr-liq-panel__title {
   display: flex; align-items: center; gap: 6px;
@@ -186,12 +195,12 @@
   margin-bottom: 16px;
 }
 .pr-liq-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 12px; }
-.pr-liq-card { background: #f8fafc; border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.pr-liq-card { background: var(--paper); border: 1.5px solid var(--border); border-radius: 10px; padding: 16px 18px; }
 .pr-liq-card__top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
 .pr-liq-card__label { font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--muted); }
 .pr-liq-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .liq-dot-green { background: var(--success); }
-.liq-dot-amber { background: #d97706; }
+.liq-dot-amber { background: var(--warn); }
 .liq-dot-red   { background: var(--danger); }
 .liq-dot-muted { background: var(--muted); }
 .pr-liq-card__row { display: flex; align-items: baseline; gap: 8px; margin-bottom: 4px; }
@@ -207,161 +216,215 @@
   position: sticky; top: 12px; z-index: 30;
   display: flex; flex-wrap: wrap; align-items: center;
   justify-content: space-between; gap: 10px 16px;
-  margin-bottom: 20px; padding: 12px 18px;
-  border-radius: 10px; border: 1px solid var(--border);
-  background: rgba(255,255,255,0.92);
-  backdrop-filter: blur(12px);
-  box-shadow: var(--shadow-card);
+  margin-bottom: 24px; padding: 10px 16px;
+  border-radius: 10px;
+  background: var(--page-hero);
+  box-shadow: 0 4px 20px rgba(70,83,154,.30);
 }
 .pr-nav__brand {
-  font-size: 13px; font-weight: 700; color: var(--ink); letter-spacing: -0.01em;
+  font-size: 12px; font-weight: 700; color: rgba(255,255,255,0.70); letter-spacing: 0.08em;
+  text-transform: uppercase;
 }
-.pr-nav__links { display: flex; flex-wrap: wrap; gap: 4px; }
+.pr-nav__links { display: flex; flex-wrap: wrap; gap: 2px; }
 .pr-nav__links a {
   display: inline-flex; align-items: center;
   padding: 6px 12px; border-radius: 6px;
   border: 1px solid transparent;
-  color: var(--ink-soft); font-size: 12px; font-weight: 500;
+  color: rgba(255,255,255,0.75); font-size: 12px; font-weight: 500;
   text-decoration: none; transition: all 150ms;
 }
 .pr-nav__links a:hover {
-  background: #eff6ff; border-color: #bfdbfe; color: var(--accent-mid);
+  background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.30); color: #fff;
 }
 
 /* ── SEÇÃO ── */
 .pr-section {
   background: var(--surface);
-  border: 1px solid var(--border);
+  border: 1.5px solid var(--border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-card);
-  padding: clamp(20px,3vw,32px);
-  margin-bottom: 16px;
+  padding: clamp(24px,3vw,36px);
+  margin-bottom: 20px;
+  overflow: hidden;
 }
-.pr-section__header { margin-bottom: 20px; }
+.pr-section__header { margin-bottom: 22px; }
 .pr-section__eyebrow {
   font-size: 10px; font-weight: 700;
-  letter-spacing: 0.16em; text-transform: uppercase;
-  color: var(--accent-mid); margin-bottom: 4px;
+  letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--accent); margin-bottom: 5px;
 }
 .pr-section__title {
-  font-size: clamp(1.1rem,2vw,1.45rem);
+  font-size: clamp(1.15rem,2vw,1.5rem);
   font-weight: 800; letter-spacing: -0.03em; color: var(--ink);
+  line-height: 1.2;
 }
-.pr-section__subtitle { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.pr-section__subtitle { font-size: 12px; color: var(--muted); margin-top: 3px; }
 .pr-section__note {
-  font-size: 11px; color: var(--muted);
-  font-style: italic; margin-bottom: 16px; margin-top: -8px;
+  font-size: 11px; color: var(--doc-cinza);
+  font-style: italic; margin-bottom: 18px; margin-top: -8px;
 }
 .pr-table-note {
-  font-size: 12px; color: var(--ink-soft);
+  font-size: 12px; color: var(--muted);
   margin-top: 10px; padding: 8px 12px;
-  background: #f8fafc; border-radius: 6px;
+  background: var(--paper); border-radius: 6px;
   border: 1px solid var(--border);
 }
 
 /* ── TABELAS ── */
 .pr-table-wrap {
   overflow-x: auto; -webkit-overflow-scrolling: touch;
-  border-radius: 8px; border: 1px solid var(--border);
+  border-radius: 10px; border: 1.5px solid var(--border);
 }
-.pr-table-wrap + .pr-table-wrap { margin-top: 12px; }
-.pr-table-wrap table { width: 100%; min-width: 400px; border-collapse: collapse; }
+.pr-table-wrap + .pr-table-wrap { margin-top: 14px; }
+.pr-table-wrap table {
+  width: 100%; min-width: 400px; border-collapse: collapse;
+  font-family: var(--doc-fonte);
+}
+
+/* Cabeçalho da tabela */
 .pr-table-wrap thead th {
-  padding: 10px 14px;
-  border-bottom: 1px solid var(--border);
-  background: #f8fafc;
-  color: var(--muted); font-size: 10px; font-weight: 700;
+  padding: 10px 16px;
+  border-bottom: 2px solid rgba(255,255,255,0.22);
+  background: var(--doc-azul);
+  color: #ffffff; font-size: 10px; font-weight: 700;
   letter-spacing: 0.12em; text-align: left;
   text-transform: uppercase; white-space: nowrap;
 }
 .pr-table-wrap thead th:not(:first-child),
 .pr-table-wrap tbody td:not(:first-child) { text-align: right; }
 .pr-table-wrap td {
-  padding: 9px 14px;
-  border-bottom: 1px solid #f1f5f9;
-  color: var(--ink-soft); font-size: 13px;
+  padding: 9px 16px;
+  border-bottom: 1px solid #eef0f8;
+  color: var(--muted); font-size: 13px;
 }
 .pr-table-wrap td:not(:first-child) {
   font-variant-numeric: tabular-nums;
-  font-family: 'IBM Plex Mono', 'Courier New', monospace;
-  font-size: 12px; white-space: nowrap; color: var(--ink);
+  font-size: 13px; white-space: nowrap; color: #000000;
 }
 .pr-table-wrap tbody tr:last-child td { border-bottom: 0; }
+.pr-table-wrap tbody tr:not(.pr-tr-grupo):not(.pr-tr-subtotal):not(.pr-tr-total):hover td {
+  background: rgba(82,100,215,.04);
+}
+
+/* Linha de grupo (nome de categoria / section header) */
+/* Grupo: no documento é azul e negrito, com o total do grupo na mesma linha.
+   Sem caixa-alta — lá está escrito "Circulante", não "CIRCULANTE". */
 .pr-tr-grupo td {
-  padding-top: 14px; padding-bottom: 4px; border-bottom: 0;
-  font-size: 10px; font-weight: 700;
-  letter-spacing: 0.12em; text-transform: uppercase;
-  color: var(--accent-mid); background: transparent !important;
-}
-.pr-tr-subtotal td {
-  font-weight: 700; color: var(--ink);
-  background: #f8fafc;
-  border-top: 1px solid var(--border);
+  padding-top: 16px; padding-bottom: 7px;
   border-bottom: 1px solid var(--border);
+  font-size: 13px; font-weight: 700; letter-spacing: 0;
+  color: var(--doc-azul) !important;
+  background: transparent !important;
 }
+.pr-tr-grupo td:not(:first-child) { font-size: 13px; }
+
+/* Linha de subtotal */
+.pr-tr-subtotal td {
+  font-weight: 700; color: var(--doc-azul);
+  background: rgba(82,100,215,.07);
+  border-top: 1px solid rgba(82,100,215,.18);
+  border-bottom: 1px solid rgba(82,100,215,.18);
+}
+
+/* Linha de total (grand-total) */
 .pr-tr-total td {
-  padding: 12px 14px;
-  font-weight: 800; font-size: 13px; color: var(--accent);
-  background: #eff6ff;
-  border-top: 2px solid #bfdbfe; border-bottom: 0;
+  padding: 12px 16px;
+  font-weight: 700; font-size: 13px; color: var(--doc-azul);
+  background: var(--doc-grifo);
+  border-top: 2px solid var(--doc-azul); border-bottom: 0;
+  letter-spacing: 0.01em;
 }
-.pr-tr-total td:not(:first-child) {
-  font-family: 'IBM Plex Mono', 'Courier New', monospace; font-size: 12px;
-}
-.pr-tr-indent td:first-child { padding-left: 28px; }
+.pr-tr-total td:not(:first-child) { font-size: 13px; }
+
+/* Linha com recuo */
+.pr-tr-indent td:first-child { padding-left: 32px; }
+.pr-tr-indent td:first-child::before { content: none; }
+
 .pr-tr-muted td { color: var(--muted); }
-.neg { color: var(--danger) !important; }
-.bp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+/* Dentro das demonstrações o negativo é só o parêntese, como no documento.
+   A cor de alerta fica para os indicadores do topo, que não existem no Word. */
+.neg { color: inherit; }
+.bp-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 
 /* ── NOTAS ── */
 .pr-nota {
-  padding: 20px 22px; border-radius: 10px;
-  border: 1px solid var(--border);
-  background: #fafbff; margin-bottom: 12px;
+  padding: 22px 24px; border-radius: 12px;
+  border: 1.5px solid var(--border);
+  background: #f9faff; margin-bottom: 14px;
+  transition: box-shadow 150ms;
 }
 .pr-nota:last-child { margin-bottom: 0; }
+.pr-nota:hover { box-shadow: 0 4px 16px rgba(82,100,215,.10); }
 .pr-nota__num {
   font-size: 10px; font-weight: 700;
-  letter-spacing: 0.14em; text-transform: uppercase;
-  color: var(--accent-mid); margin-bottom: 4px;
+  letter-spacing: 0.16em; text-transform: uppercase;
+  color: var(--doc-azul); margin-bottom: 5px;
 }
 .pr-nota__title {
-  font-size: 15px; font-weight: 700; color: var(--ink);
+  font-size: 15px; font-weight: 700; color: var(--doc-azul);
   margin-bottom: 10px; padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1.5px solid var(--border);
 }
-.pr-nota__text { font-size: 13px; color: var(--ink-soft); line-height: 1.75; }
+.pr-nota__text { font-size: 13px; color: var(--muted); line-height: 1.80; }
+.pr-nota__text + .pr-nota__text { margin-top: 10px; }
+
+/* Subtítulo dentro da nota ("3.1. Caixa e equivalentes", "Moeda funcional").
+   Azul e com um tracinho à esquerda, para a hierarquia do documento impresso
+   sobreviver na tela — título azul, corpo preto. */
+.pr-nota__subtitle {
+  font-size: 13px; font-weight: 700; color: var(--doc-azul);
+  margin-top: 16px; margin-bottom: 6px;
+  padding-left: 10px; border-left: 3px solid var(--doc-azul);
+  line-height: 1.45;
+}
+.pr-nota__text + .pr-nota__subtitle { margin-top: 18px; }
+.pr-nota__subtitle:first-child { margin-top: 0; }
 
 /* ── ASSINATURAS ── */
-.pr-assinaturas { display: grid; grid-template-columns: repeat(3,1fr); gap: 12px; margin-top: 16px; }
+.pr-assinaturas { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-top: 16px; }
 .pr-assinatura {
-  padding: 18px 20px; border-radius: 10px;
-  border: 1px solid var(--border); background: var(--surface);
+  padding: 20px 22px; border-radius: 12px;
+  border: 1.5px solid var(--border); background: var(--surface);
+  box-shadow: var(--shadow-card);
 }
-.pr-assinatura__linha { width: 80px; height: 1px; background: var(--border); margin-bottom: 8px; }
-.pr-assinatura__nome { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 2px; }
+.pr-assinatura__linha { width: 80px; height: 2px; background: var(--border); margin-bottom: 10px; }
+.pr-assinatura__nome { font-size: 13px; font-weight: 700; color: var(--ink); margin-bottom: 3px; }
 .pr-assinatura__cargo {
   font-size: 11px; color: var(--muted);
-  text-transform: uppercase; letter-spacing: 0.06em; line-height: 1.4;
+  text-transform: uppercase; letter-spacing: 0.07em; line-height: 1.5;
 }
 
 /* ── FOOTER ── */
 .pr-footer {
-  margin-top: 20px; padding: 20px 24px;
+  margin-top: 24px; padding: 20px 26px;
   display: flex; flex-wrap: wrap; align-items: center;
   justify-content: space-between; gap: 12px;
-  border-radius: var(--radius); border: 1px solid var(--border);
+  border-radius: var(--radius); border: 1.5px solid var(--border);
   background: var(--surface); box-shadow: var(--shadow-card);
 }
 .pr-footer__brand { font-size: 14px; font-weight: 800; color: var(--ink); margin-bottom: 2px; letter-spacing: -0.02em; }
 .pr-footer__info { font-size: 11px; color: var(--muted); line-height: 1.8; }
 .pr-footer__badge {
-  padding: 7px 14px; border-radius: 999px;
-  border: 1px solid var(--border); background: #f8fafc;
+  padding: 7px 16px; border-radius: 999px;
+  border: 1.5px solid var(--border); background: var(--paper);
   font-size: 11px; font-weight: 700;
-  letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+  letter-spacing: 0.09em; text-transform: uppercase; color: var(--muted);
 }
 
+/* ── ANÁLISE IA ── */
+.pr-analise-section { display: grid; gap: 12px; }
+.pr-analise-card {
+  border-radius: 12px; border: 1.5px solid var(--border);
+  background: #f9faff; padding: 18px 22px;
+}
+.pr-analise-card__label {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--accent); margin-bottom: 8px;
+}
+.pr-analise-card__text {
+  font-size: 13px; color: var(--muted); line-height: 1.80;
+  white-space: pre-wrap;
+}
 
 /* ── RESPONSIVE ── */
 @media (max-width: 860px) {
@@ -374,34 +437,83 @@
   .pr-kpi-grid, .pr-assinaturas { grid-template-columns: 1fr; }
 }
 
+/* ── KPI ROW POR SEÇÃO ── */
+.pr-section-kpi-row {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.pr-section-kpi-item {
+  background: var(--paper);
+  border: 1.5px solid var(--border);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+.pr-section-kpi-label {
+  font-size: 10px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--muted); margin-bottom: 4px;
+}
+.pr-section-kpi-value {
+  font-size: 1.15rem; font-weight: 800;
+  letter-spacing: -0.04em; line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+.pr-section-kpi-value.neg { color: var(--danger); }
+.pr-section-kpi-note { font-size: 11px; color: var(--muted); margin-top: 3px; }
+@media (max-width: 860px) { .pr-section-kpi-row { grid-template-columns: 1fr 1fr; } }
+@media (max-width: 520px) { .pr-section-kpi-row { grid-template-columns: 1fr 1fr; } }
+
 /* ── IMPRESSÃO / PDF ── */
 @media print {
   * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 
   body { background: white; margin: 0; }
 
-  /* Esconde elementos de tela */
-  .no-print, .pr-nav, .pr-header__actions, .pr-kpi-grid, .pr-footer { display: none !important; }
+  .no-print, .pr-nav, .pr-header__actions, .pr-kpi-grid, .pr-liq-panel, .pr-footer { display: none !important; }
 
-  /* Seções no PDF */
   .pr-root { background: white !important; }
   .pr-shell { padding: 24px 32px 40px; max-width: 100%; }
   .pr-header {
     display: block;
-    border: none; box-shadow: none; padding: 0 0 20px;
+    border-radius: 0; box-shadow: none; padding: 0 0 20px;
     margin-bottom: 24px;
-    border-bottom: 2px solid #e2e8f0;
+    border-bottom: 2px solid #dde0f0;
+    background: white !important;
+    color: var(--ink) !important;
   }
+  .pr-header__name, .pr-header__meta, .pr-header__sub { color: var(--ink) !important; }
   .pr-header__actions { display: none !important; }
   .pr-section {
-    border: 1px solid #e2e8f0;
+    border: 1px solid #dde0f0;
     box-shadow: none;
     page-break-inside: avoid;
     break-inside: avoid;
     margin-bottom: 20px;
   }
-  .pr-table-wrap { border: 1px solid #e2e8f0; }
+  .pr-table-wrap { border: 1px solid #dde0f0; }
   .bp-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
   .pr-kpi-grid { display: none !important; }
   .pr-assinaturas { grid-template-columns: repeat(3,1fr); }
 }
+
+
+/* Linha grifada — no Word, "Saldo em 31/12/2025", "Mutações do Período" e
+   "Saldo Contábil, líquido" vêm com fundo #D9E1F2 e negrito. */
+.pr-tr-grifo td {
+  background: var(--doc-grifo) !important;
+  font-weight: 700; color: var(--doc-azul);
+}
+
+
+/* No documento o negativo é indicado apenas pelos parênteses, em preto.
+   Não há texto vermelho em nenhuma das demonstrações. */
+.pr-table-wrap td.neg { color: #000000; }
+.pr-tr-grupo td.neg, .pr-tr-total td.neg, .pr-tr-subtotal td.neg,
+.pr-tr-grifo td.neg { color: var(--doc-azul); }
+
+/* Corpo das notas na fonte do documento */
+.pr-nota__text, .pr-nota__title, .pr-nota__subtitle { font-family: var(--doc-fonte); }
+.pr-nota__text { color: #000000; font-size: 14px; }

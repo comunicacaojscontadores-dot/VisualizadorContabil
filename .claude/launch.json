@@ -1,0 +1,113 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "Imersao",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "C:\\Users\\01-comunicação\\Documents\\Programas em Desenvolvimento\\visualizadorcontbil-main\\imersao-reforma\\node_modules\\vite\\bin\\vite.js",
+        "--port",
+        "5180",
+        "--config",
+        "C:\\Users\\01-comunicação\\Documents\\Programas em Desenvolvimento\\visualizadorcontbil-main\\imersao-reforma\\vite.config.ts"
+      ],
+      "port": 5180
+    },
+    {
+      "name": "Dev (Vite)",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev"
+      ],
+      "port": 8080
+    },
+    {
+      "name": "Motion Preview",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "-m",
+        "http.server",
+        "5555"
+      ],
+      "port": 5555
+    },
+    {
+      "name": "JS Noticias",
+      "runtimeExecutable": "python",
+      "runtimeArgs": [
+        "C:\\Users\\01-comunicação\\Documents\\Programas em Desenvolvimento\\js-noticias\\app.py"
+      ],
+      "port": 5000
+    },
+    {
+      "name": "JS Monitor",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "wrangler",
+        "dev",
+        "--config",
+        "C:\\Users\\01-comunicação\\Documents\\Programas em Desenvolvimento\\js-monitor\\wrangler.jsonc",
+        "--port",
+        "8788"
+      ],
+      "port": 8788
+    },
+    {
+      "name": "JS Academy",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "C:\\Users\\01-comunicação\\Documents\\Programas em Desenvolvimento\\visualizadorcontbil-main\\jsacademy\\node_modules\\wrangler\\bin\\wrangler.js",
+        "dev",
+        "--config",
+        "C:\\Users\\01-comunicação\\Documents\\Programas em Desenvolvimento\\visualizadorcontbil-main\\jsacademy\\wrangler.jsonc",
+        "--port",
+        "8791"
+      ],
+      "port": 8791
+    },
+    {
+      "name": "Termometro",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "C:\\Users\\01-comunicação\\Documents\\Programas em Desenvolvimento\\visualizadorcontbil-main\\termometro\\node_modules\\wrangler\\bin\\wrangler.js",
+        "dev",
+        "--config",
+        "C:\\Users\\01-comunicação\\Documents\\Programas em Desenvolvimento\\visualizadorcontbil-main\\termometro\\wrangler.jsonc",
+        "--port",
+        "8790"
+      ],
+      "port": 8790
+    },
+    {
+      "name": "Matricula (preview)",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "C:\\Users\\01-comunicação\\Documents\\Programas em Desenvolvimento\\visualizadorcontbil-main\\imersao-reforma\\node_modules\\vite\\bin\\vite.js",
+        "preview",
+        "--outDir",
+        "dist-matricula",
+        "--port",
+        "5183",
+        "--strictPort",
+        "--config",
+        "C:\\Users\\01-comunicação\\Documents\\Programas em Desenvolvimento\\visualizadorcontbil-main\\imersao-reforma\\vite.config.ts"
+      ],
+      "port": 5183
+    },
+    {
+      "name": "Cartinhas Natal",
+      "runtimeExecutable": "C:\\Program Files\\nodejs\\node.exe",
+      "runtimeArgs": [
+        "C:\\Users\\01-comunicação\\Documents\\Codex\\2026-09-21\\vasm\\outputs\\Cartinhas-de-Natal-2026\\projeto-cloudflare\\node_modules\\wrangler\\bin\\wrangler.js",
+        "dev",
+        "--config",
+        "C:\\Users\\01-comunicação\\Documents\\Codex\\2026-09-21\\vasm\\outputs\\Cartinhas-de-Natal-2026\\projeto-cloudflare\\dist\\server\\wrangler.json",
+        "--port",
+        "8820",
+        "--local"
+      ],
+      "port": 8820
+    }
+  ]
+}

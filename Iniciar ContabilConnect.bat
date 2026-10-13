@@ -1,0 +1,13 @@
+@echo off
+title ContabilConnect - Iniciando...
+cd /d "%~dp0"
+
+echo Verificando dependencias...
+if not exist "node_modules" (
+    echo Instalando dependencias pela primeira vez, aguarde...
+    npm install
+)
+
+echo Iniciando ContabilConnect...
+start "" "Abrir no Navegador.vbs"
+npm run dev

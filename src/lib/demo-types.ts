@@ -78,6 +78,18 @@ export type DemoData = {
 
   observacoes?: string;
   assinaturas?: { nome: string; cargo?: string; cpf?: string; crc?: string }[];
+
+  // Análise gerada pela IA + anotações do colaborador
+  analise?: {
+    visao_geral?: string;
+    ativo?: string;
+    passivo?: string;
+    dre?: string;
+    liquidez?: string;
+    pontos_atencao?: string;
+    perspectivas?: string;
+    nota_colaborador?: string; // campo livre para o contador adicionar antes de publicar
+  };
 };
 
 export const EMPTY_DEMO_DATA: DemoData = {};

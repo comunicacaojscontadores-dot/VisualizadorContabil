@@ -9,6 +9,7 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
+import { Route as InovacaoRouteImport } from './routes/inovacao'
 import { Route as AuthRouteImport } from './routes/auth'
 import { Route as AuthenticatedRouteRouteImport } from './routes/_authenticated/route'
 import { Route as IndexRouteImport } from './routes/index'
@@ -20,6 +21,11 @@ import { Route as AuthenticatedClientesRouteImport } from './routes/_authenticat
 import { Route as AuthenticatedDemonstrativosIndexRouteImport } from './routes/_authenticated/demonstrativos.index'
 import { Route as AuthenticatedDemonstrativosIdRouteImport } from './routes/_authenticated/demonstrativos.$id'
 
+const InovacaoRoute = InovacaoRouteImport.update({
+  id: '/inovacao',
+  path: '/inovacao',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const AuthRoute = AuthRouteImport.update({
   id: '/auth',
   path: '/auth',
@@ -75,6 +81,7 @@ const AuthenticatedDemonstrativosIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/inovacao': typeof InovacaoRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/prospeccao': typeof AuthenticatedProspeccaoRoute
@@ -86,6 +93,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/auth': typeof AuthRoute
+  '/inovacao': typeof InovacaoRoute
   '/clientes': typeof AuthenticatedClientesRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/prospeccao': typeof AuthenticatedProspeccaoRoute
@@ -99,6 +107,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteRouteWithChildren
   '/auth': typeof AuthRoute
+  '/inovacao': typeof InovacaoRoute
   '/_authenticated/clientes': typeof AuthenticatedClientesRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/prospeccao': typeof AuthenticatedProspeccaoRoute
@@ -112,6 +121,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/auth'
+    | '/inovacao'
     | '/clientes'
     | '/dashboard'
     | '/prospeccao'
@@ -123,6 +133,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/auth'
+    | '/inovacao'
     | '/clientes'
     | '/dashboard'
     | '/prospeccao'
@@ -135,6 +146,7 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/auth'
+    | '/inovacao'
     | '/_authenticated/clientes'
     | '/_authenticated/dashboard'
     | '/_authenticated/prospeccao'
@@ -148,12 +160,20 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRouteRoute: typeof AuthenticatedRouteRouteWithChildren
   AuthRoute: typeof AuthRoute
+  InovacaoRoute: typeof InovacaoRoute
   DSlugRoute: typeof DSlugRoute
   ESlugRoute: typeof ESlugRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
+    '/inovacao': {
+      id: '/inovacao'
+      path: '/inovacao'
+      fullPath: '/inovacao'
+      preLoaderRoute: typeof InovacaoRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/auth': {
       id: '/auth'
       path: '/auth'
@@ -250,6 +270,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRouteRoute: AuthenticatedRouteRouteWithChildren,
   AuthRoute: AuthRoute,
+  InovacaoRoute: InovacaoRoute,
   DSlugRoute: DSlugRoute,
   ESlugRoute: ESlugRoute,
 }

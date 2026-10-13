@@ -20,10 +20,35 @@ interface Props {
 const fmtBRL = (v?: number | null) =>
   v == null ? "—" : new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 }).format(v);
 
+// Em demonstração contábil, ausência de valor se escreve com traço — não com
+// zero nem com célula vazia.
 const fmtN = (v?: number | null, parens = false): string => {
-  if (v == null) return "—";
+  if (v == null || v === 0) return "-";
   if (parens && v < 0) return `(${new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(Math.abs(v))})`;
   return new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 }).format(v);
+};
+
+// A coluna da demonstração é datada pelo último dia do período: "12/2025" vira
+// "31/12/2025". Uma competência já escrita por extenso passa direto.
+const rotuloData = (c?: string | null): string => {
+  const s = (c || "").trim();
+  if (!s) return "";
+  const mm = s.match(/^(\d{2})\/(\d{4})$/);
+  if (!mm) return s;
+  const mes = Number(mm[1]);
+  const ano = Number(mm[2]);
+  const ultimoDia = new Date(ano, mes, 0).getDate();
+  return `${String(ultimoDia).padStart(2, "0")}/${mm[1]}/${ano}`;
+};
+
+const cleanItem = (s?: string | null): string => {
+  if (!s) return "";
+  return s
+    .replace(/\s*\(grupo[^)]*\)/gi, "")
+    .replace(/\s*\(tipo[^)]*\)/gi, "")
+    .replace(/,\s*(saldo|subtotal|resultado|grupo)\b.*/gi, "")
+    .replace(/\s*-\s*(C|D)\s*$/gi, "")
+    .trim();
 };
 
 function initials(name?: string | null) {
@@ -37,11 +62,13 @@ function CompTable({
   col1,
   col2,
   parens = true,
+  titulo = "Descrição",
 }: {
   rows: LineItem[];
   col1: string;
   col2?: string;
   parens?: boolean;
+  titulo?: string;
 }) {
   const hasAnt = rows.some((r) => r.valor_ant != null);
   return (
@@ -49,7 +76,7 @@ function CompTable({
       <table>
         <thead>
           <tr>
-            <th>Descrição</th>
+            <th>{titulo}</th>
             {col2 && <th style={{ width: 80, fontSize: 10 }}>Nota</th>}
             <th>{col1}</th>
             {hasAnt && col2 && <th>{col2}</th>}
@@ -74,11 +101,13 @@ function CompTable({
                     : ""
                 }
               >
-                <td>{r.item}</td>
+                <td>{cleanItem(r.item)}</td>
                 {col2 && <td style={{ color: "var(--accent-mid)", fontFamily: "monospace", fontSize: 11 }}>{r.nota ?? ""}</td>}
-                <td className={neg && !isGrupo ? "neg" : ""}>{isGrupo ? "" : fmtN(r.valor, parens)}</td>
+                {/* A linha de grupo carrega o total da seção — "circulante, não
+                    circulante, patrimônio líquido, cada um com seus totais". */}
+                <td className={neg ? "neg" : ""}>{fmtN(r.valor, parens)}</td>
                 {hasAnt && col2 && (
-                  <td className={negAnt && !isGrupo ? "neg" : ""}>{isGrupo ? "" : fmtN(r.valor_ant, parens)}</td>
+                  <td className={negAnt ? "neg" : ""}>{fmtN(r.valor_ant, parens)}</td>
                 )}
               </tr>
             );
@@ -89,23 +118,54 @@ function CompTable({
   );
 }
 
+// No Word, as linhas de fechamento vêm com fundo azul claro e negrito:
+// "Saldo em 31/12/2025", "Mutações do Período", "Saldo Contábil, líquido",
+// "Total". É o grifo que o relatório online tem de repetir.
+const linhaGrifada = (descricao?: string | null): boolean => {
+  const t = (descricao || "").trim().toLowerCase();
+  return ["saldo", "mutaç", "mutac", "total"].some((prefixo) => t.startsWith(prefixo));
+};
+
+// O corpo de uma nota mistura parágrafos e subtítulos numerados ("3.1. Caixa e
+// equivalentes", "17.2. Reservas"). Sem distinguir os dois, tudo vira um bloco
+// cinzento de texto e some a hierarquia que o documento impresso tem.
+function NotaTexto({ texto }: { texto: string }) {
+  const paragrafos = texto.split(/\n{2,}/).map((p) => p.trim()).filter(Boolean);
+  return (
+    <>
+      {paragrafos.map((p, i) => {
+        const subtitulo = /^\d+\.\d+\.?\s+\S/.test(p) && p.length < 90;
+        const rotulo = !subtitulo && /^[A-ZÀ-Ú][^.!?]{3,70}$/.test(p) && !p.endsWith(".");
+        if (subtitulo || rotulo) {
+          return <div key={i} className="pr-nota__subtitle">{p}</div>;
+        }
+        return <p key={i} className="pr-nota__text">{p}</p>;
+      })}
+    </>
+  );
+}
+
 // ── nota com tabelas internas ─────────────────────────────────────
 function NotaBlock({ n, idx }: { n: NonNullable<DemoData["notas_explicativas"]>[number]; idx: number }) {
   return (
     <div className="pr-nota">
       <div className="pr-nota__num">Nota {n.numero ?? idx + 1}</div>
       <div className="pr-nota__title">{n.titulo}</div>
-      {n.conteudo && <p className="pr-nota__text">{n.conteudo}</p>}
+      {n.conteudo && <NotaTexto texto={n.conteudo} />}
       {n.tabelas?.map((t, ti) => (
-        <div key={ti} className="pr-table-wrap" style={{ marginTop: 14 }}>
+        <div key={ti} className="pr-table-wrap" style={{ marginTop: 8 }}>
           <table>
             <thead>
-              <tr>{t.colunas.map((c, ci) => <th key={ci}>{c}</th>)}</tr>
+              {/* A primeira coluna da nota não leva rótulo: a tabela vai direto
+                  para as informações, com as datas por cima dos valores. */}
+              <tr>{t.colunas.map((c, ci) => (
+                <th key={ci}>{ci === 0 && /^descri/i.test(c) ? "" : c}</th>
+              ))}</tr>
             </thead>
             <tbody>
               {t.linhas.map((l, li) => (
-                <tr key={li} className={l.descricao.toLowerCase().includes("total") ? "pr-tr-total" : ""}>
-                  <td>{l.descricao}</td>
+                <tr key={li} className={linhaGrifada(l.descricao) ? "pr-tr-grifo" : ""}>
+                  <td>{cleanItem(l.descricao)}</td>
                   {l.valores.map((v, vi) => (
                     <td key={vi} className={typeof v === "number" && v < 0 ? "neg" : ""}>
                       {typeof v === "number" ? fmtN(v, true) : v}
@@ -121,6 +181,21 @@ function NotaBlock({ n, idx }: { n: NonNullable<DemoData["notas_explicativas"]>[
   );
 }
 
+// ── KPI row por seção ─────────────────────────────────────────────
+function SectionKpis({ items }: { items: { label: string; value: string; note?: string; neg?: boolean }[] }) {
+  return (
+    <div className="pr-section-kpi-row">
+      {items.map((it, i) => (
+        <div key={i} className="pr-section-kpi-item">
+          <div className="pr-section-kpi-label">{it.label}</div>
+          <div className={`pr-section-kpi-value${it.neg ? " neg" : ""}`}>{it.value}</div>
+          {it.note && <div className="pr-section-kpi-note">{it.note}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── componente principal ──────────────────────────────────────────
 export function PublicReport({ dados, cliente, competencia, publishedAt }: Props) {
   useEffect(() => {
@@ -128,7 +203,7 @@ export function PublicReport({ dados, cliente, competencia, publishedAt }: Props
     if (!document.getElementById(id)) {
       const link = document.createElement("link");
       link.id = id; link.rel = "stylesheet";
-      link.href = "https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap";
+      link.href = "https://fonts.googleapis.com/css2?family=Instrument+Sans:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap";
       document.head.appendChild(link);
     }
   }, []);
@@ -136,8 +211,8 @@ export function PublicReport({ dados, cliente, competencia, publishedAt }: Props
   const nomeCliente = cliente?.nome_fantasia || cliente?.razao_social || dados.empresa?.nome || "Cliente";
   const cnpj = cliente?.cnpj || dados.empresa?.cnpj;
   const logoUrl = cliente?.logo_url;
-  const comp = (competencia || dados.competencia || "").toUpperCase();
-  const compAnt = (dados.competencia_anterior || "").toUpperCase();
+  const comp = rotuloData(competencia || dados.competencia);
+  const compAnt = rotuloData(dados.competencia_anterior);
   const pubDate = publishedAt ? new Date(publishedAt).toLocaleDateString("pt-BR") : "";
 
   const kpis = dados.kpis ?? {};
@@ -154,35 +229,119 @@ export function PublicReport({ dados, cliente, competencia, publishedAt }: Props
 
   // ── KPIs derivados da DRE e BP ─────────────────────────────────
   const findRow = (rows: LineItem[] | undefined, kws: string[]) =>
-    rows?.find((r) => kws.every((k) => r.item.toLowerCase().includes(k)));
-  const sumRows = (rows?: LineItem[]) => rows?.reduce((s, r) => s + (r.valor || 0), 0) ?? 0;
+    rows?.find((r) => r.item && kws.every((k) => r.item.toLowerCase().includes(k)));
+  // Total de uma seção do balanço. Um balanço estruturado repete o mesmo dinheiro
+  // três vezes — na linha de grupo, nas linhas analíticas e no subtotal — então
+  // somar tudo triplicava o total. Prefere o subtotal declarado (TOTAL DO ATIVO);
+  // sem ele, soma apenas as analíticas.
+  const sumRows = (rows?: LineItem[]) => {
+    if (!rows?.length) return 0;
+    const subtotais = rows.filter((r) => r.tipo === "subtotal" && r.valor != null);
+    if (subtotais.length) return subtotais[subtotais.length - 1].valor;
+    return rows.filter((r) => r.tipo !== "grupo").reduce((s, r) => s + (r.valor || 0), 0);
+  };
 
-  const receitaLiquida =
-    findRow(dre, ["receita", "líquida"])?.valor ??
-    findRow(dre, ["receita", "liquida"])?.valor ??
-    (dre.filter((r) => r.tipo === "receita").reduce((s, r) => s + r.valor, 0) || kpis.faturamento);
+  const receitaLiquida = (() => {
+    const named = findRow(dre, ["receita", "líquida"]) ?? findRow(dre, ["receita", "liquida"]);
+    if (named?.valor != null && named.valor !== 0) return named.valor;
+    const dreReceitas = dre.filter((r) => r.tipo === "receita").reduce((s, r) => s + (r.valor ?? 0), 0);
+    if (dreReceitas !== 0) return dreReceitas;
+    return kpis.faturamento;
+  })();
 
-  const lucroLiquido =
-    findRow(dre, ["lucro", "líquido"])?.valor ??
-    findRow(dre, ["lucro", "liquido"])?.valor ??
-    dre.find((r) => r.tipo === "resultado")?.valor ??
-    kpis.lucro;
+  // Busca o último item tipo=resultado na DRE (resultado final, não subtotais)
+  const dreResultados = dre.filter((r) => r.tipo === "resultado" && r.valor != null);
+  const dreResultadoFinal = dreResultados.length ? dreResultados[dreResultados.length - 1] : null;
+  const dreNamed =
+    findRow(dre, ["lucro", "líquido"]) ??
+    findRow(dre, ["lucro", "liquido"]) ??
+    findRow(dre, ["resultado", "período"]) ??
+    findRow(dre, ["resultado", "periodo"]);
+  const lucroLiquido = (() => {
+    // Prefere linha nomeada, depois último resultado, depois kpi
+    const fromDre = dreNamed ?? dreResultadoFinal;
+    if (fromDre?.valor != null && fromDre.valor !== 0) return fromDre.valor;
+    if (kpis.lucro != null && kpis.lucro !== 0) return kpis.lucro;
+    // Aceita 0 como valor válido se algo explícito existe
+    if (fromDre?.valor != null) return fromDre.valor;
+    return kpis.lucro;
+  })();
 
   const patrimonioLiquido = bp?.patrimonio_liquido ? sumRows(bp.patrimonio_liquido) : undefined;
+
+  // O passivo e o PL são uma coluna só no modelo do escritório: o PL entra como
+  // mais um grupo, e o TOTAL DO PASSIVO no fim engloba os três grupos.
+  const passivoComPl = (() => {
+    const passivo = bp?.passivo ?? [];
+    const pl = bp?.patrimonio_liquido ?? [];
+    if (!pl.length) return passivo;
+
+    const semTotalGeral = passivo.filter((r) => r.tipo !== "subtotal");
+    const totalPassivo = passivo.find((r) => r.tipo === "subtotal");
+    const totalPl = pl.find((r) => r.tipo === "subtotal");
+    const itensPl = pl.filter((r) => r.tipo !== "subtotal");
+
+    const linhas: LineItem[] = [
+      ...semTotalGeral,
+      { item: "Patrimônio Líquido", valor: totalPl?.valor ?? sumRows(pl),
+        valor_ant: totalPl?.valor_ant, tipo: "grupo" },
+      ...itensPl.map((r) => ({ ...r, indent: true })),
+    ];
+    if (totalPassivo) {
+      linhas.push({
+        item: "TOTAL DO PASSIVO",
+        valor: (totalPassivo.valor ?? 0) + (totalPl?.valor ?? 0),
+        valor_ant: (totalPassivo.valor_ant ?? 0) + (totalPl?.valor_ant ?? 0),
+        tipo: "subtotal",
+      });
+    }
+    return linhas;
+  })();
   const margem = receitaLiquida && lucroLiquido != null ? (lucroLiquido / receitaLiquida) * 100 : null;
 
   // Índices de liquidez
+  const casaTermos = (item: string | undefined, inc: string[], exc: string[]) => {
+    if (!item) return false;
+    const t = item.toLowerCase();
+    return inc.every((w) => t.includes(w)) && exc.every((w) => !t.includes(w));
+  };
+  // Soma apenas linhas analíticas — grupos e subtotais são agregados dos filhos.
   const matchVal = (rows: LineItem[], inc: string[], exc: string[] = []) =>
-    rows.filter((r) => { const t = r.item.toLowerCase(); return inc.every((w) => t.includes(w)) && exc.every((w) => !t.includes(w)); })
+    rows.filter((r) => r.tipo !== "grupo" && r.tipo !== "subtotal" && casaTermos(r.item, inc, exc))
         .reduce((s, r) => s + r.valor, 0);
+  // Valor da linha de grupo (ex.: "Ativo Circulante"). Quando ela existe, é o total
+  // da seção: somá-la com os filhos contava "Outros Ativos Circulantes" duas vezes.
+  const grupoVal = (rows: LineItem[], inc: string[], exc: string[] = []) =>
+    rows.find((r) => r.tipo === "grupo" && casaTermos(r.item, inc, exc))?.valor ?? null;
   const ativos = bp?.ativo ?? [];
   const passivos = bp?.passivo ?? [];
-  const ativoCirc = matchVal(ativos, ["circulante"], ["não", "nao"]);
-  const ativoNaoCirc = matchVal(ativos, ["não", "circulante"]) || matchVal(ativos, ["nao", "circulante"]);
+
+  // Itens não-circulantes do ativo (imobilizado, intangível, etc.)
+  const NCIRC_ATIVO = ["imobilizado", "intangível", "intangivel", "investimento", "realizável", "realizavel", "diferido"];
+  const isNaoCircAtivo = (item: string) => NCIRC_ATIVO.some((w) => item.toLowerCase().includes(w));
+  // Se existir item com "circulante" no nome, usa; senão, subtrai não-circulantes do total
+  const ativoCircExplicit =
+    grupoVal(ativos, ["circulante"], ["não", "nao"]) ?? matchVal(ativos, ["circulante"], ["não", "nao"]);
+  const ativoNaoCircExplicit =
+    grupoVal(ativos, ["não", "circulante"]) ?? grupoVal(ativos, ["nao", "circulante"]) ??
+    (matchVal(ativos, ["não", "circulante"]) || matchVal(ativos, ["nao", "circulante"]));
+  const ativoNaoCirc = ativoNaoCircExplicit || ativos.filter(r => r.tipo !== "grupo" && r.tipo !== "subtotal" && r.item && isNaoCircAtivo(r.item)).reduce((s, r) => s + r.valor, 0);
+  const ativoTotal = sumRows(ativos);
+  const ativoCirc = ativoCircExplicit || (ativoTotal - ativoNaoCirc);
+
   const estoques = matchVal(ativos, ["estoque"]);
   const caixa = matchVal(ativos, ["caixa"]) || matchVal(ativos, ["equivalente"]);
-  const passivoCirc = matchVal(passivos, ["circulante"], ["não", "nao"]);
-  const passivoNaoCirc = matchVal(passivos, ["não", "circulante"]) || matchVal(passivos, ["nao", "circulante"]);
+
+  // Passivo circulante: usa explícito ou subtrai não-circulantes
+  const NCIRC_PASSIVO = ["não circulante", "nao circulante", "longo prazo", "exigível", "exigivel"];
+  const passivoCircExplicit =
+    grupoVal(passivos, ["circulante"], ["não", "nao"]) ?? matchVal(passivos, ["circulante"], ["não", "nao"]);
+  const passivoNaoCirc =
+    grupoVal(passivos, ["não", "circulante"]) ?? grupoVal(passivos, ["nao", "circulante"]) ??
+    (matchVal(passivos, ["não", "circulante"]) || matchVal(passivos, ["nao", "circulante"]) ||
+      passivos.filter(r => r.tipo !== "grupo" && r.tipo !== "subtotal" && r.item && NCIRC_PASSIVO.some(w => r.item.toLowerCase().includes(w))).reduce((s, r) => s + r.valor, 0));
+  const passivoTotal = sumRows(passivos);
+  const passivoCirc = passivoCircExplicit || (passivoTotal - passivoNaoCirc);
 
   const lc = passivoCirc ? ativoCirc / passivoCirc : null;
   const ls = passivoCirc ? (ativoCirc - estoques) / passivoCirc : null;
@@ -376,22 +535,29 @@ export function PublicReport({ dados, cliente, competencia, publishedAt }: Props
               </div>
               <div className="pr-section__note">As notas explicativas da administração são parte integrante das demonstrações contábeis.</div>
 
+              <SectionKpis items={[
+                { label: "Ativo Total", value: fmtBRL(ativoTotal), note: "Total do ativo" },
+                { label: "Passivo Total", value: fmtBRL(passivoTotal), note: "Total do passivo" },
+                { label: "Patrimônio Líquido", value: fmtBRL(patrimonioLiquido ?? 0), note: "Capital próprio" },
+                { label: "Endividamento", value: passivoTotal && ativoTotal ? `${((passivoTotal / ativoTotal) * 100).toFixed(1)}%` : "—", note: "Passivo / Ativo" },
+              ]} />
+
               <div className="bp-grid">
                 {/* ATIVO */}
                 {(bp.ativo?.length ?? 0) > 0 && (
-                  <CompTable rows={bp.ativo!} col1={comp || "Atual"} col2={compAnt || (bp.ativo!.some(r => r.valor_ant != null) ? "Anterior" : undefined)} />
+                  <CompTable titulo="ATIVO" rows={bp.ativo!} col1={comp || "Atual"} col2={compAnt || (bp.ativo!.some(r => r.valor_ant != null) ? "Anterior" : undefined)} />
                 )}
-                {/* PASSIVO + PL */}
-                <div>
-                  {(bp.passivo?.length ?? 0) > 0 && (
-                    <div style={{ marginBottom: 12 }}>
-                      <CompTable rows={bp.passivo!} col1={comp || "Atual"} col2={compAnt || (bp.passivo!.some(r => r.valor_ant != null) ? "Anterior" : undefined)} />
-                    </div>
-                  )}
-                  {(bp.patrimonio_liquido?.length ?? 0) > 0 && (
-                    <CompTable rows={bp.patrimonio_liquido!} col1={comp || "Atual"} col2={compAnt || (bp.patrimonio_liquido!.some(r => r.valor_ant != null) ? "Anterior" : undefined)} />
-                  )}
-                </div>
+                {/* PASSIVO E PATRIMÔNIO LÍQUIDO — uma coluna só, como no modelo
+                    do escritório: Circulante, Não Circulante e Patrimônio Líquido,
+                    cada um com seu total, e um TOTAL DO PASSIVO fechando tudo. */}
+                {passivoComPl.length > 0 && (
+                  <CompTable
+                    titulo="PASSIVO E PATRIMÔNIO LÍQUIDO"
+                    rows={passivoComPl}
+                    col1={comp || "Atual"}
+                    col2={compAnt || (passivoComPl.some(r => r.valor_ant != null) ? "Anterior" : undefined)}
+                  />
+                )}
               </div>
 
               {/* Total check */}
@@ -413,6 +579,18 @@ export function PublicReport({ dados, cliente, competencia, publishedAt }: Props
                 {comp && <div className="pr-section__subtitle">Exercícios findos em {comp}{compAnt ? ` e ${compAnt}` : ""} — valores em R$ mil</div>}
               </div>
               <div className="pr-section__note">As notas explicativas da administração são parte integrante das demonstrações contábeis.</div>
+              {(() => {
+                const lucroBruto = findRow(dre, ["lucro", "bruto"])?.valor ?? null;
+                const margemBruta = receitaLiquida && lucroBruto != null ? (lucroBruto / receitaLiquida) * 100 : null;
+                return (
+                  <SectionKpis items={[
+                    { label: "Receita Líquida", value: receitaLiquida != null ? fmtBRL(receitaLiquida) : "—", note: "do período" },
+                    { label: "Lucro Bruto", value: lucroBruto != null ? fmtBRL(lucroBruto) : "—", note: margemBruta != null ? `Margem ${margemBruta.toFixed(1)}%` : undefined, neg: (lucroBruto ?? 0) < 0 },
+                    { label: "Lucro Líquido", value: lucroLiquido != null ? fmtBRL(lucroLiquido) : "—", note: margem != null ? `Margem ${margem.toFixed(1)}%` : undefined, neg: (lucroLiquido ?? 0) < 0 },
+                    { label: "Impostos", value: kpis.impostos != null ? fmtBRL(kpis.impostos) : "—", note: "Tributos do período" },
+                  ]} />
+                );
+              })()}
               <CompTable rows={dre} col1={comp || "Atual"} col2={compAnt || (dre.some(r => r.valor_ant != null) ? "Anterior" : undefined)} />
             </div>
           )}
@@ -449,11 +627,9 @@ export function PublicReport({ dados, cliente, competencia, publishedAt }: Props
                   </thead>
                   <tbody>
                     {dmpl.linhas.map((l, i) => {
-                      const isTotal = l.descricao.toLowerCase().includes("saldo") || l.descricao.toLowerCase().includes("total");
-                      const isMut = l.descricao.toLowerCase().includes("mutação");
                       return (
-                        <tr key={i} className={isTotal ? "pr-tr-total" : isMut ? "pr-tr-subtotal" : ""}>
-                          <td>{l.descricao}</td>
+                        <tr key={i} className={linhaGrifada(l.descricao) ? "pr-tr-grifo" : ""}>
+                          <td>{cleanItem(l.descricao)}</td>
                           {l.valores.map((v, vi) => (
                             <td key={vi} className={v < 0 ? "neg" : ""}>{fmtN(v, true)}</td>
                           ))}
@@ -475,6 +651,14 @@ export function PublicReport({ dados, cliente, competencia, publishedAt }: Props
                 {comp && <div className="pr-section__subtitle">Método indireto — exercícios findos em {comp}{compAnt ? ` e ${compAnt}` : ""} — valores em R$ mil</div>}
               </div>
               <div className="pr-section__note">As notas explicativas da administração são parte integrante das demonstrações contábeis.</div>
+              {dfc && (
+                <SectionKpis items={[
+                  { label: "Caixa Inicial", value: dfc.caixa_inicio != null ? fmtBRL(dfc.caixa_inicio) : "—", note: "início do exercício" },
+                  { label: "Gerado Operacional", value: dfc.operacional ? fmtBRL(dfc.operacional.reduce((s, r) => s + (r.valor ?? 0), 0)) : "—", note: "atividades operacionais", neg: (dfc.operacional?.reduce((s,r)=>s+(r.valor??0),0)??0)<0 },
+                  { label: "Caixa Final", value: dfc.caixa_fim != null ? fmtBRL(dfc.caixa_fim) : "—", note: "fim do exercício" },
+                  { label: "Variação de Caixa", value: dfc.variacao_caixa != null ? fmtBRL(dfc.variacao_caixa) : "—", note: "no período", neg: (dfc.variacao_caixa ?? 0) < 0 },
+                ]} />
+              )}
               <div style={{ display: "grid", gap: 12 }}>
                 {([
                   { key: "operacional" as const, label: "Atividades Operacionais", data: dfc.operacional },
@@ -528,6 +712,38 @@ export function PublicReport({ dados, cliente, competencia, publishedAt }: Props
               {notas.map((n, i) => <NotaBlock key={i} n={n} idx={i} />)}
             </div>
           )}
+          {/* ── ANÁLISE IA ── */}
+          {dados.analise && Object.values(dados.analise).some(Boolean) && (() => {
+            const a = dados.analise!;
+            const secoes = [
+              { label: "Visão Geral", texto: a.visao_geral },
+              { label: "Ativo", texto: a.ativo },
+              { label: "Passivo e Endividamento", texto: a.passivo },
+              { label: "Resultado (DRE)", texto: a.dre },
+              { label: "Liquidez", texto: a.liquidez },
+              { label: "Pontos de Atenção", texto: a.pontos_atencao },
+              { label: "Perspectivas", texto: a.perspectivas },
+              { label: "Nota do Contador", texto: a.nota_colaborador },
+            ].filter((s) => s.texto);
+            return (
+              <div id="analise" className="pr-section">
+                <div className="pr-section__header">
+                  <div className="pr-section__eyebrow">Análise Contábil</div>
+                  <div className="pr-section__title">Análise das Demonstrações Contábeis</div>
+                  {comp && <div className="pr-section__subtitle">Exercício findo em {comp}</div>}
+                </div>
+                <div className="space-y-4">
+                  {secoes.map((s) => (
+                    <div key={s.label} className="rounded-xl border border-border/50 bg-background/60 p-5">
+                      <div className="text-xs font-semibold uppercase tracking-widest text-primary mb-2">{s.label}</div>
+                      <p className="text-sm leading-relaxed text-foreground/80 whitespace-pre-wrap">{s.texto}</p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
+
 
           {/* ── ASSINATURAS ── */}
           {assinaturas.length > 0 && (

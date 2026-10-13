@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { DemoData } from "@/lib/demo-types";
+import type { DemoData, LineItem } from "@/lib/demo-types";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { brl, brlFull, compactBR } from "@/lib/format";
 import {
@@ -103,7 +103,7 @@ export function PremiumReport({
 
   // ---- Derive KPIs dinamicamente a partir dos dados ----
   const findRow = (rows: { item: string; valor: number }[] | undefined, kw: string[]) =>
-    rows?.find((r) => kw.every((k) => r.item.toLowerCase().includes(k)));
+    rows?.find((r) => r.item && kw.every((k) => r.item.toLowerCase().includes(k)));
   const sum = (rows?: { item: string; valor: number }[]) =>
     rows?.reduce((s, r) => s + (r.valor || 0), 0) ?? 0;
 
@@ -137,22 +137,44 @@ export function PremiumReport({
   // ---- Índices de Liquidez ----
   const ativos = dados.balanco_patrimonial?.ativo ?? [];
   const passivos = dados.balanco_patrimonial?.passivo ?? [];
-  const matchVal = (rows: { item: string; valor: number }[], inc: string[], exc: string[] = []) =>
+  const casaTermos = (item: string | undefined, inc: string[], exc: string[]) => {
+    if (!item) return false;
+    const t = item.toLowerCase();
+    return inc.every((w) => t.includes(w)) && exc.every((w) => !t.includes(w));
+  };
+  // Só linhas analíticas: grupo e subtotal já são a soma dos filhos.
+  const matchVal = (rows: LineItem[], inc: string[], exc: string[] = []) =>
     rows
-      .filter((r) => {
-        const t = r.item.toLowerCase();
-        return inc.every((w) => t.includes(w)) && exc.every((w) => !t.includes(w));
-      })
+      .filter((r) => r.tipo !== "grupo" && r.tipo !== "subtotal" && casaTermos(r.item, inc, exc))
       .reduce((s, r) => s + r.valor, 0);
+  // Valor da linha de grupo (ex.: "Ativo Circulante") — é o total da seção.
+  const grupoVal = (rows: LineItem[], inc: string[], exc: string[] = []) =>
+    rows.find((r) => r.tipo === "grupo" && casaTermos(r.item, inc, exc))?.valor ?? null;
 
-  const ativoCirc = matchVal(ativos, ["circulante"], ["não"]);
-  const ativoNaoCirc =
-    matchVal(ativos, ["não", "circulante"]) || matchVal(ativos, ["realizável"]);
+  // Prefere o subtotal declarado; sem ele, soma apenas as analíticas.
+  const sumRows = (rows: LineItem[]) => {
+    if (!rows.length) return 0;
+    const subtotais = rows.filter((r) => r.tipo === "subtotal" && r.valor != null);
+    if (subtotais.length) return subtotais[subtotais.length - 1].valor;
+    return rows.filter((r) => r.tipo !== "grupo").reduce((s, r) => s + (r.valor ?? 0), 0);
+  };
+  const NCIRC_ATIVO = ["imobilizado", "intangível", "intangivel", "investimento", "realizável", "realizavel", "diferido"];
+  const ativoNaoCircExplicit =
+    grupoVal(ativos, ["não", "circulante"]) ??
+    (matchVal(ativos, ["não", "circulante"]) || matchVal(ativos, ["realizável"]));
+  const ativoNaoCircImplicit = ativos.filter(r => r.tipo !== "grupo" && r.tipo !== "subtotal" && r.item && NCIRC_ATIVO.some(w => r.item.toLowerCase().includes(w))).reduce((s, r) => s + r.valor, 0);
+  const ativoNaoCirc = ativoNaoCircExplicit || ativoNaoCircImplicit;
+  const ativoCircExplicit = grupoVal(ativos, ["circulante"], ["não"]) ?? matchVal(ativos, ["circulante"], ["não"]);
+  const ativoCirc = ativoCircExplicit || (sumRows(ativos) - ativoNaoCirc);
+
   const estoques = matchVal(ativos, ["estoque"]);
   const caixa = matchVal(ativos, ["caixa"]) || matchVal(ativos, ["equivalente"]);
-  const passivoCirc = matchVal(passivos, ["circulante"], ["não"]);
+
   const passivoNaoCirc =
-    matchVal(passivos, ["não", "circulante"]) || matchVal(passivos, ["exigível"]);
+    grupoVal(passivos, ["não", "circulante"]) ??
+    (matchVal(passivos, ["não", "circulante"]) || matchVal(passivos, ["exigível"]));
+  const passivoCircExplicit = grupoVal(passivos, ["circulante"], ["não"]) ?? matchVal(passivos, ["circulante"], ["não"]);
+  const passivoCirc = passivoCircExplicit || (sumRows(passivos) - passivoNaoCirc);
 
   const lc = passivoCirc ? ativoCirc / passivoCirc : null;
   const ls = passivoCirc ? (ativoCirc - estoques) / passivoCirc : null;
@@ -172,7 +194,7 @@ export function PremiumReport({
 
   const [liqOpen, setLiqOpen] = useState(false);
 
-  const defaultTab = dados.balanco_patrimonial ? "bp" : dados.dre?.length ? "dre" : dados.dra?.length ? "dra" : dados.dmpl?.length ? "dmpl" : "dfc";
+  const defaultTab = dados.balanco_patrimonial ? "bp" : dados.dre?.length ? "dre" : dados.dra?.length ? "dra" : dados.dmpl?.linhas?.length ? "dmpl" : "dfc";
   const [demoTab, setDemoTab] = useState<string>(defaultTab);
 
   const tabMap: Record<string, string> = { balanco: "bp", dre: "dre", dra: "dra", dmpl: "dmpl", dfc: "dfc" };
@@ -181,7 +203,7 @@ export function PremiumReport({
     { id: "balanco", label: "Balanço", show: !!dados.balanco_patrimonial },
     { id: "dre", label: "DRE", show: !!dados.dre?.length },
     { id: "dra", label: "DRA", show: !!dados.dra?.length },
-    { id: "dmpl", label: "DMPL", show: !!dados.dmpl?.length },
+    { id: "dmpl", label: "DMPL", show: !!dados.dmpl?.linhas?.length },
     { id: "dfc", label: "DFC", show: !!dados.dfc },
     { id: "notas", label: "Notas", show: !!dados.notas_explicativas?.length },
   ].filter((n) => n.show);
@@ -447,7 +469,7 @@ export function PremiumReport({
         ) : null}
 
         {/* DEMONSTRATIVOS */}
-        {(dados.dre?.length || dados.balanco_patrimonial || dados.dfc || dados.dmpl?.length || dados.dra?.length) && (
+        {(dados.dre?.length || dados.balanco_patrimonial || dados.dfc || dados.dmpl?.linhas?.length || dados.dra?.length) && (
           <Section>
             <div id="demonstrativos">
               <SectionTitle eyebrow="Demonstrativos" title="Balanço, DRE, DFC e mais" />
@@ -460,7 +482,7 @@ export function PremiumReport({
                     {dados.balanco_patrimonial ? <PillTab value="bp">Balanço</PillTab> : null}
                     {dados.dre?.length ? <PillTab value="dre">DRE</PillTab> : null}
                     {dados.dra?.length ? <PillTab value="dra">DRA</PillTab> : null}
-                    {dados.dmpl?.length ? <PillTab value="dmpl">DMPL</PillTab> : null}
+                    {dados.dmpl?.linhas?.length ? <PillTab value="dmpl">DMPL</PillTab> : null}
                     {dados.dfc ? <PillTab value="dfc">DFC</PillTab> : null}
                   </TabsList>
 
@@ -501,9 +523,38 @@ export function PremiumReport({
                     </TabsContent>
                   ) : null}
 
-                  {dados.dmpl?.length ? (
+                  {dados.dmpl?.linhas?.length ? (
                     <TabsContent value="dmpl" className="mt-6 animate-fade-up">
-                      <FinancialTable rows={dados.dmpl} />
+                      {/* A DMPL tem uma coluna por grupo do PL — não cabe na FinancialTable,
+                          que é item/valor. Mesma estrutura do relatório público. */}
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm">
+                          <thead>
+                            <tr className="border-b border-border">
+                              <th className="text-left py-2 pr-3 font-medium text-muted-foreground">Descrição</th>
+                              {(dados.dmpl.colunas ?? []).map((c, i) => (
+                                <th key={i} className="text-right py-2 px-3 font-medium text-muted-foreground whitespace-nowrap">{c}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {dados.dmpl.linhas.map((l, i) => {
+                              const d = l.descricao.toLowerCase();
+                              const destaque = d.includes("saldo") || d.includes("total");
+                              return (
+                                <tr key={i} className={`border-b border-border/50 ${destaque ? "font-semibold bg-muted/40" : ""}`}>
+                                  <td className="py-2 pr-3">{l.descricao}</td>
+                                  {l.valores.map((v, vi) => (
+                                    <td key={vi} className={`text-right py-2 px-3 tabular-nums whitespace-nowrap ${v < 0 ? "text-[#DC2626]" : ""}`}>
+                                      {v < 0 ? `(${brl(Math.abs(v))})` : brl(v)}
+                                    </td>
+                                  ))}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
                     </TabsContent>
                   ) : null}
                 </Tabs>

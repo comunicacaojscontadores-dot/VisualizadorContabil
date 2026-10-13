@@ -1,0 +1,16 @@
+# Copie este arquivo para .dev.vars (que é ignorado pelo git) e preencha.
+# Serve para DUAS coisas ao mesmo tempo:
+#   1. o painel web rodando local (npm run dev)
+#
+
+# Obrigatório — token de acesso da Meta (usuário do sistema = não expira)
+
+# Opcionais — sem eles a integração funciona, mas ninguém avisa quando o token
+# está vencendo nem quais permissões faltam
+
+# Opcionais — fixam qual conta usar quando há mais de uma Página
+
+# Opcional — versão da Graph API (padrão v23.0)
+
+# Supabase (service role) para rodar o painel local com acesso admin
+# SUPABASE_SERVICE_ROLE_KEY=

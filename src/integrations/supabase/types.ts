@@ -109,6 +109,27 @@ export type Database = {
           },
         ]
       }
+      inscricoes_inovacao: {
+        Row: {
+          cargo: string
+          created_at: string
+          id: string
+          nome: string
+        }
+        Insert: {
+          cargo: string
+          created_at?: string
+          id?: string
+          nome: string
+        }
+        Update: {
+          cargo?: string
+          created_at?: string
+          id?: string
+          nome?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
@@ -209,7 +230,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      demo_status: "processando" | "pendente" | "publicado" | "erro"
+      demo_status: "processando" | "pendente" | "rascunho" | "publicado" | "erro"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -337,7 +358,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      demo_status: ["processando", "pendente", "publicado", "erro"],
+      demo_status: ["processando", "pendente", "rascunho", "publicado", "erro"],
     },
   },
 } as const

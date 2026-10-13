@@ -7,15 +7,28 @@ compatibility_flags = ["nodejs_compat"]
 [assets]
 directory = "dist/client"
 binding = "ASSETS"
+html_handling = "auto-trailing-slash"
+not_found_handling = "single-page-application"
 
 # Variáveis públicas (não-sensíveis)
 [vars]
-SUPABASE_URL = "https://jzkvarjffcqrfphewgxx.supabase.co"
-SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6a3ZhcmpmZmNxcmZwaGV3Z3h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MjE0MTYsImV4cCI6MjA5NzI5NzQxNn0.13PIC1G1QT8uV8w-d7RJPiqaHEoOYNOI_cbBgL97128"
-VITE_SUPABASE_URL = "https://jzkvarjffcqrfphewgxx.supabase.co"
-VITE_SUPABASE_PROJECT_ID = "jzkvarjffcqrfphewgxx"
-VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imp6a3ZhcmpmZmNxcmZwaGV3Z3h4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE3MjE0MTYsImV4cCI6MjA5NzI5NzQxNn0.13PIC1G1QT8uV8w-d7RJPiqaHEoOYNOI_cbBgL97128"
+SUPABASE_URL = "https://bgdspeqekptybexgmqaj.supabase.co"
+SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJnZHNwZXFla3B0eWJleGdtcWFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5OTA0ODEsImV4cCI6MjEwMjU2NjQ4MX0.LF2PMK37tb0DpLF4-4czdvhiMW-C42vf5S-wGSHY08Q"
+VITE_SUPABASE_URL = "https://bgdspeqekptybexgmqaj.supabase.co"
+VITE_SUPABASE_PROJECT_ID = "bgdspeqekptybexgmqaj"
+VITE_SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJnZHNwZXFla3B0eWJleGdtcWFqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODY5OTA0ODEsImV4cCI6MjEwMjU2NjQ4MX0.LF2PMK37tb0DpLF4-4czdvhiMW-C42vf5S-wGSHY08Q"
+
+
+# Cloudflare Workers AI (gratuito, sem API key externa)
+[ai]
+binding = "AI"
+
+# Keepalive contra a pausa por inatividade do Supabase (7 dias sem uso).
+# Duas vezes por dia: o projeto já pausou uma vez com o cron de 3 em 3 dias, porque
+# duas execuções perdidas bastavam para fechar a janela. Cron do Worker é gratuito.
+[triggers]
+crons = ["0 8 * * *", "0 20 * * *"]
 
 # Segredos — configure via terminal ANTES de fazer o deploy:
-#   npx wrangler secret put LOVABLE_API_KEY
 #   npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+#

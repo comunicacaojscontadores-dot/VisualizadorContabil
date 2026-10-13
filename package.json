@@ -1,18 +1,67 @@
 {
-  "name": "tanstack_start_ts",
+  "name": "contabilconnect",
+  "version": "1.0.0",
+  "description": "Sistema de demonstrativos contábeis JS Contadores",
+  "author": "JS Contadores <adm.welliton@jscontadores.com.br>",
   "private": true,
   "sideEffects": false,
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "vite build && node -e \"const fs=require('fs');const f='dist/server/server.js';const s=fs.readFileSync(f,'utf8');fs.writeFileSync(f,s.replace('async fetch(request, env, ctx) {\\n    try {','async fetch(request, env, ctx) {\\n    if (env && typeof env === \\\"object\\\") { Object.assign(process.env, env); }\\n    try {'))\"",
+    "build": "vite build && node -e \"const fs=require('fs');const f='dist/server/server.js';let s=fs.readFileSync(f,'utf8');const marker='async fetch(request, env, ctx) {';const inject='\\n    if (env && typeof env === \\\"object\\\") { globalThis.__CF_ENV__ = env; if (env.AI) globalThis.__CF_AI__ = env.AI; try { const keys = [...Object.getOwnPropertyNames(env), ...Object.keys(env)]; keys.forEach(k => { try { const v = env[k]; if (typeof v === \\\"string\\\") process.env[k] = v; } catch(e){} }); } catch(e){} const knownSecrets=[\\\"SUPABASE_SERVICE_ROLE_KEY\\\",\\\"META_ACCESS_TOKEN\\\",\\\"META_APP_ID\\\",\\\"META_APP_SECRET\\\"]; knownSecrets.forEach(k=>{try{const v=env[k];if(typeof v===\\\"string\\\")process.env[k]=v;}catch(e){}}); }';const idx=s.indexOf(marker);if(idx===-1){console.error('PATCH FAILED: marker not found');process.exit(1);}s=s.slice(0,idx+marker.length)+inject+s.slice(idx+marker.length);fs.writeFileSync(f,s);console.log('AI binding patch OK');\"",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "lint": "eslint .",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "electron": "electron electron/main.cjs",
+    "electron:build": "electron-builder --win --x64"
+  },
+  "main": "electron/main.cjs",
+  "build": {
+    "appId": "br.com.jscontadores.contabilconnect",
+    "productName": "ContabilConnect",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "win": {
+      "target": "nsis",
+      "icon": "electron/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "installerLanguages": [
+        "pt_BR"
+      ],
+      "language": "1046"
+    },
+    "files": [
+      "electron/**",
+      "node_modules/**",
+      "src/**",
+      "public/**",
+      "package.json",
+      "vite.config.*",
+      "tsconfig.json",
+      ".env",
+      ".dev.vars"
+    ],
+    "extraResources": [
+      {
+        "from": ".",
+        "to": "app",
+        "filter": [
+          "**/*",
+          "!dist/**",
+          "!dist-electron/**",
+          "!.git/**"
+        ]
+      }
+    ]
   },
   "dependencies": {
     "@ai-sdk/google": "^3.0.83",
+    "@ai-sdk/groq": "^4.0.8",
     "@ai-sdk/openai-compatible": "^2.0.48",
     "@hookform/resolvers": "^5.2.2",
     "@lovable.dev/cloud-auth-js": "^1.1.2",
@@ -71,6 +120,7 @@
     "unpdf": "^1.6.2",
     "vaul": "^1.1.2",
     "vite-tsconfig-paths": "^6.0.2",
+    "xlsx": "^0.18.5",
     "zod": "^3.24.2"
   },
   "devDependencies": {
@@ -80,6 +130,8 @@
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",
     "@vitejs/plugin-react": "^5.0.4",
+    "electron": "^43.4.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^9.32.0",
     "eslint-config-prettier": "^10.1.1",
     "eslint-plugin-prettier": "^5.2.6",
@@ -87,6 +139,7 @@
     "eslint-plugin-react-refresh": "^0.4.20",
     "globals": "^15.15.0",
     "nitro": "3.0.260603-beta",
+    "png-to-ico": "^3.0.2",
     "prettier": "^3.7.3",
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.56.1",

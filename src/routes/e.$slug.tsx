@@ -94,6 +94,8 @@ function EnvelopePage() {
           className="group relative w-full max-w-xl"
           onMouseEnter={() => setHovered(true)}
           onMouseLeave={() => setHovered(false)}
+          onClick={() => setHovered(true)}
+          style={{ cursor: "pointer" }}
         >
           {/* Reflexo */}
           <div className="absolute -bottom-10 left-10 right-10 h-12 rounded-full bg-black/40 blur-2xl" />
@@ -144,7 +146,7 @@ function EnvelopePage() {
                     hovered ? "opacity-0 -translate-y-2" : "opacity-100"
                   }`}
                 >
-                  Passe o mouse aqui para revelar
+                  Toque aqui para revelar
                 </p>
                 <div
                   className={`absolute inset-0 flex items-center justify-center transition-all duration-500 ${
@@ -162,18 +164,24 @@ function EnvelopePage() {
               </div>
 
               {/* Botão */}
-              <button
-                onClick={() => navigate({ to: "/d/$slug", params: { slug } })}
-                disabled={isLoading || !data}
-                className={`inline-flex items-center gap-3 rounded-full border border-[#C9A84C]/60 bg-[#C9A84C]/10 px-6 py-3 text-sm font-medium text-white backdrop-blur-sm transition-all duration-500 hover:bg-[#C9A84C]/25 disabled:cursor-not-allowed disabled:opacity-40 ${
-                  hovered
-                    ? "translate-y-0 opacity-100"
-                    : "pointer-events-none translate-y-3 opacity-0"
-                }`}
-              >
-                Acessar demonstrativo contábil
-                <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
-              </button>
+              {!isLoading && !data ? (
+                <p className={`text-sm text-white/50 transition-all duration-500 ${hovered ? "opacity-100" : "opacity-0"}`}>
+                  Este demonstrativo ainda não foi publicado.
+                </p>
+              ) : (
+                <button
+                  onClick={() => navigate({ to: "/d/$slug", params: { slug } })}
+                  disabled={isLoading || !data}
+                  className={`inline-flex items-center gap-3 rounded-full border border-[#C9A84C]/60 bg-[#C9A84C]/10 px-6 py-3 text-sm font-medium text-white backdrop-blur-sm transition-all duration-500 hover:bg-[#C9A84C]/25 disabled:cursor-not-allowed disabled:opacity-40 ${
+                    hovered
+                      ? "translate-y-0 opacity-100"
+                      : "pointer-events-none translate-y-3 opacity-0"
+                  }`}
+                >
+                  {isLoading ? <Loader2 className="size-4 animate-spin" /> : "Acessar demonstrativo contábil"}
+                  <ArrowRight className="size-4 transition-transform group-hover:translate-x-1" />
+                </button>
+              )}
 
               <p className="text-[11px] uppercase tracking-[0.3em] text-white/30">
                 Confidencial · Uso exclusivo do cliente

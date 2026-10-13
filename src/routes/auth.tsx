@@ -9,6 +9,12 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { Sparkles, Loader2 } from "lucide-react";
 
+// Quando o banco está fora do ar, o erro é sempre de rede — e "aguarde alguns
+// segundos" fazia a equipe tentar em laço por algo que não se resolve sozinho.
+const FALHA_SERVIDOR =
+  "Não foi possível falar com o servidor de dados. Isso não se resolve tentando de novo — " +
+  "avise o responsável pelo sistema (adm.welliton@jscontadores.com.br).";
+
 export const Route = createFileRoute("/auth")({
   ssr: false,
   head: () => ({ meta: [{ title: "Entrar — Contabil Connect" }] }),
@@ -25,19 +31,38 @@ function AuthPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (data.session) nav({ to: "/dashboard" });
+    supabase.auth.getSession().then(({ data, error }) => {
+      if (error || !data.session) {
+        // Limpa sessão expirada ou inválida silenciosamente
+        supabase.auth.signOut().catch(() => {});
+        return;
+      }
+      nav({ to: "/dashboard" });
+    }).catch(() => {
+      supabase.auth.signOut().catch(() => {});
     });
   }, [nav]);
 
   async function onLogin(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    setLoading(false);
-    if (error) return toast.error(error.message);
-    toast.success("Bem-vindo!");
-    nav({ to: "/dashboard" });
+    try {
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
+      if (error) {
+        const msg = error.message.includes("fetch") || error.message.includes("network")
+          ? FALHA_SERVIDOR
+          : error.message === "Invalid login credentials"
+          ? "E-mail ou senha incorretos."
+          : error.message;
+        return toast.error(msg, { duration: 12_000 });
+      }
+      toast.success("Bem-vindo!");
+      nav({ to: "/dashboard" });
+    } catch {
+      toast.error(FALHA_SERVIDOR, { duration: 12_000 });
+    } finally {
+      setLoading(false);
+    }
   }
 
   async function onSignup(e: React.FormEvent) {
